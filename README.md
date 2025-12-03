@@ -27,3 +27,9 @@ CREATE DATABASE pfidb1;
 ```bash
 cp .env.example .env
 ```
+
+# Iniciar el proyecto
+
+```bash
+uvicorn app.main:app --realod
+```
