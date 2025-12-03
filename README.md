@@ -31,5 +31,5 @@ cp .env.example .env
 # Iniciar el proyecto
 
 ```bash
-uvicorn app.main:app --realod
+uvicorn app.main:app --reload
 ```
