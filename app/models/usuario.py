@@ -42,7 +42,8 @@ class User(Base):
             return False
         try:
             from app.core.security import verify_password
-            return verify_password(raw_password or "", self.pass_)
+            ok, _ = verify_password(raw_password or "", self.pass_)
+            return ok
         except Exception:
             return False
 

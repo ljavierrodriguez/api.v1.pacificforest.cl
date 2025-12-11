@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
-from app.schemas.user import UserCreate, UserRead, Token
+from sqlalchemy.orm import Session, joinedload
+from app.schemas.user import UserCreate, UserRead, Token, TokenWithUser
 from app.models.usuario import User
 from app.db.session import get_db
 from app.core.security import create_access_token, authenticate_user, get_current_user
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Endpoint de inicio de sesión (formulario)
 @router.post(
         "/login",
-        response_model=Token,
+        response_model=TokenWithUser,
         summary='Iniciar sesión (formulario)',
         description=(
                 """
@@ -43,7 +43,27 @@ router = APIRouter(prefix="/auth", tags=["auth"])
                 Respuesta JSON:
 
                 ```json
-                { "access_token": "<token>", "token_type": "bearer" }
+                {
+                    "access_token": "<token>",
+                    "token_type": "bearer",
+                    "user": {
+                        "id_usuario": 1,
+                        "login": "miusuario",
+                        "nombre": "Mi Nombre",
+                        "correo": "usuario@example.com",
+                        "seguridades": [
+                            {
+                                "id_seguridad": 1,
+                                "id_usuario": 1,
+                                "modulo": "proforma",
+                                "crear": true,
+                                "ver": true,
+                                "editar": true,
+                                "eliminar": false
+                            }
+                        ]
+                    }
+                }
                 ```
 
                 Nota:
@@ -64,6 +84,9 @@ def login_for_access_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Cargar las seguridades del usuario
+    user = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == user.id_usuario).first()
+    
     access_token = create_access_token({"sub": user.login})
     # Optionally set token in cookie for browser clients
     if response:
@@ -74,7 +97,11 @@ def login_for_access_token(
             secure=True,
             samesite="lax",
         )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
 
 
 # User registration endpoint
@@ -105,7 +132,9 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
     "/me",
     response_model=UserRead,
     summary='Información del usuario autenticado',
-    description='Devuelve los datos del usuario autenticado (requiere token Bearer).',
+    description='Devuelve los datos del usuario autenticado incluyendo sus permisos de seguridad (requiere token Bearer).',
 )
-def read_users_me(current_user: User = Depends(get_current_user)):
-    return current_user
+def read_users_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Cargar las seguridades del usuario
+    user = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == current_user.id_usuario).first()
+    return user

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 
 
@@ -7,8 +7,26 @@ class Token(BaseModel):
     token_type: str = Field(..., description="Descripción de token_type")
 
 
+class TokenWithUser(BaseModel):
+    access_token: str = Field(..., description="Token de acceso")
+    token_type: str = Field(..., description="Tipo de token")
+    user: UserRead = Field(..., description="Información del usuario")
+
+
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+
+class SeguridadRead(BaseModel):
+    id_seguridad: int
+    id_usuario: int
+    modulo: str
+    crear: bool
+    ver: bool
+    editar: bool
+    eliminar: bool
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserBase(BaseModel):
@@ -36,6 +54,7 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id_usuario: int
+    seguridades: List[SeguridadRead] = Field(default_factory=list, description="Lista de permisos de seguridad del usuario")
 
     model_config = ConfigDict(from_attributes=True)
 

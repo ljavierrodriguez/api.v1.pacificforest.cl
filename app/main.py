@@ -1,5 +1,6 @@
 from typing import Union
 from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -29,6 +30,15 @@ fake_admin_user = {
 app = FastAPI(
     #docs_url=None,  # Cambia la ruta de Swagger UI
     redoc_url=None  # Cambia la ruta de ReDoc
+)
+
+# Configurar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # En producción, especifica los orígenes permitidos: ["http://localhost:3000", "https://tudominio.com"]
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos los métodos: GET, POST, PUT, DELETE, etc.
+    allow_headers=["*"],  # Permite todos los headers, incluyendo Authorization
 )
 
 # Incluir las rutas de la versión 1 de la API
