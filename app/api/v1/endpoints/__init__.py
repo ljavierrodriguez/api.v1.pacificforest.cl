@@ -40,6 +40,7 @@ from .unidad_venta import router as unidad_venta_router
 from .estado_odc import router as estado_odc_router
 from .estado_oe import router as estado_oe_router
 from .usuario import router as usuario_router
+from .seguridad import router as seguridad_router
 
 router = APIRouter()
 
@@ -83,4 +84,5 @@ router.include_router(unidad_venta_router)
 router.include_router(estado_odc_router)
 router.include_router(estado_oe_router)
 router.include_router(usuario_router)
+router.include_router(seguridad_router)
 

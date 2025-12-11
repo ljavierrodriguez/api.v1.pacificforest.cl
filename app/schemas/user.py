@@ -1,5 +1,6 @@
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from app.schemas.seguridad import SeguridadRead
 
 
 class Token(BaseModel):
@@ -15,18 +16,6 @@ class TokenWithUser(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
-
-
-class SeguridadRead(BaseModel):
-    id_seguridad: int
-    id_usuario: int
-    modulo: str
-    crear: bool
-    ver: bool
-    editar: bool
-    eliminar: bool
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class UserBase(BaseModel):
