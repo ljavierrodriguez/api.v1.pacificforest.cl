@@ -42,7 +42,7 @@ app.add_middleware(
 )
 
 # Incluir las rutas de la versión 1 de la API
-app.include_router(router, prefix="/api")
+app.include_router(router, prefix="/api/v1")
 
 templates = Jinja2Templates(directory="templates")
 

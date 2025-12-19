@@ -42,6 +42,7 @@ from .estado_oe import router as estado_oe_router
 from .usuario import router as usuario_router
 from .seguridad import router as seguridad_router
 from .forma_pago import router as forma_pago_router
+from .unidad_medida import router as unidad_medida_router
 
 router = APIRouter()
 
@@ -87,4 +88,5 @@ router.include_router(estado_oe_router)
 router.include_router(usuario_router)
 router.include_router(seguridad_router)
 router.include_router(forma_pago_router)
+router.include_router(unidad_medida_router)
 
