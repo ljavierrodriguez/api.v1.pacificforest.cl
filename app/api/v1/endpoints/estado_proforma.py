@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.estado_proforma import EstadoProforma
 from app.schemas.estado_proforma import (
-    EstadoProformaCreate,
+EstadoProformaCreate,
     EstadoProformaRead,
     EstadoProformaUpdate,
 )
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/estado_proforma", tags=["estado_proforma"])
 

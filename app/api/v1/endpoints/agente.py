@@ -1,7 +1,8 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.orm import Session
 from app.schemas.agente import AgenteCreate, AgenteRead, AgenteUpdate
+from app.schemas.pagination import create_paginated_response
 from app.models.agente import Agente
 from app.db.session import get_db
 

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.gasto import Gasto
 from app.schemas.gasto import GastoCreate, GastoRead, GastoUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/gasto", tags=["gasto"])
 
@@ -18,9 +19,23 @@ def create_gasto(payload: GastoCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[GastoRead], summary='GET Gasto', description='GET Gasto endpoint. Replace this placeholder with a meaningful description.')
-def list_gasto(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Gasto).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Gasto', description='GET Gasto endpoint. Replace this placeholder with a meaningful description.')
+def list_gasto(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Gasto).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Gasto).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=GastoRead, summary='GET Gasto', description='GET Gasto endpoint. Replace this placeholder with a meaningful description.')

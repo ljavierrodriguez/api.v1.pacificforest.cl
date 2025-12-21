@@ -1,8 +1,9 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.models.estado_detalle_ple import EstadoDetallePle
 from app.schemas.estado_detalle_ple import EstadoDetallePleCreate, EstadoDetallePleRead
+from app.schemas.pagination import create_paginated_response
 from app.db.session import get_db
 
 router = APIRouter(prefix="/estados-detalle-ple", tags=["estado_detalle_ple"])

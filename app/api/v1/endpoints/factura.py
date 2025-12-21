@@ -1,8 +1,9 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.models.factura import Factura
 from app.schemas.factura import FacturaCreate, FacturaRead, FacturaUpdate
+from app.schemas.pagination import create_paginated_response
 from app.db.session import get_db
 
 router = APIRouter(prefix="/facturas", tags=["facturas"])

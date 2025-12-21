@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.detalle_ide import DetalleIde
 from app.schemas.detalle_ide import (
-    DetalleIdeCreate,
+DetalleIdeCreate,
     DetalleIdeRead,
     DetalleIdeUpdate,
 )
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/detalle_ide", tags=["detalle_ide"])
 

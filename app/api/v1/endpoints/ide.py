@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.ide import Ide
 from app.schemas.ide import IdeCreate, IdeRead, IdeUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/ide", tags=["ide"])
 
@@ -22,9 +23,23 @@ def create_ide(payload: IdeCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[IdeRead], summary='GET Ide', description='GET Ide endpoint. Replace this placeholder with a meaningful description.')
-def list_ide(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Ide).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Ide', description='GET Ide endpoint. Replace this placeholder with a meaningful description.')
+def list_ide(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Ide).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Ide).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=IdeRead, summary='GET Ide', description='GET Ide endpoint. Replace this placeholder with a meaningful description.')

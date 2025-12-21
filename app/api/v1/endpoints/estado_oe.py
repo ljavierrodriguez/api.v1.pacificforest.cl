@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.estado_oe import EstadoOe
 from app.schemas.estado_oe import EstadoOeCreate, EstadoOeRead, EstadoOeUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/estado_oe", tags=["estado_oe"])
 

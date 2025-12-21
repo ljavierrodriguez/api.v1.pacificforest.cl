@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.contacto_orden_compra import ContactoOrdenCompra
 from app.schemas.contacto_orden_compra import (
-    ContactoOrdenCompraCreate,
+ContactoOrdenCompraCreate,
     ContactoOrdenCompraRead,
     ContactoOrdenCompraUpdate,
 )
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/contacto_orden_compra", tags=["contacto_orden_compra"])
 

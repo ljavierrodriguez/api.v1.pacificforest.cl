@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.operacion_exportacion import OperacionExportacion
 from app.schemas.operacion_exportacion import (
-    OperacionExportacionCreate,
+OperacionExportacionCreate,
     OperacionExportacionRead,
     OperacionExportacionUpdate,
 )
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/operacion_exportacion", tags=["operacion_exportacion"])
 

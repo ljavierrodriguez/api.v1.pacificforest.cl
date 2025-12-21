@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.proforma import Proforma
 from app.schemas.proforma import ProformaCreate, ProformaRead, ProformaUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/proforma", tags=["proforma"])
 
@@ -22,9 +23,23 @@ def create_proforma(payload: ProformaCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[ProformaRead], summary='GET Proforma', description='GET Proforma endpoint. Replace this placeholder with a meaningful description.')
-def list_proforma(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Proforma).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Proforma', description='GET Proforma endpoint. Replace this placeholder with a meaningful description.')
+def list_proforma(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Proforma).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Proforma).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=ProformaRead, summary='GET Proforma', description='GET Proforma endpoint. Replace this placeholder with a meaningful description.')

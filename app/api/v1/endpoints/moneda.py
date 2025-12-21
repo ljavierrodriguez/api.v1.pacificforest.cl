@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.moneda import Moneda
 from app.schemas.moneda import MonedaCreate, MonedaRead, MonedaUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/moneda", tags=["moneda"])
 
@@ -23,9 +24,23 @@ def create_moneda(payload: MonedaCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[MonedaRead], summary='GET Moneda', description='GET Moneda endpoint. Replace this placeholder with a meaningful description.')
-def list_moneda(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Moneda).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Moneda', description='GET Moneda endpoint. Replace this placeholder with a meaningful description.')
+def list_moneda(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Moneda).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Moneda).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=MonedaRead, summary='GET Moneda', description='GET Moneda endpoint. Replace this placeholder with a meaningful description.')

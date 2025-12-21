@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.contacto_proforma import ContactoProforma
 from app.schemas.contacto_proforma import (
-    ContactoProformaCreate,
+ContactoProformaCreate,
     ContactoProformaRead,
     ContactoProformaUpdate,
 )
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/contacto_proforma", tags=["contacto_proforma"])
 

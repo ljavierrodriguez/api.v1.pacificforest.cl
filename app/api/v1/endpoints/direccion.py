@@ -1,8 +1,9 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.models.direccion import Direccion
 from app.schemas.direccion import DireccionCreate, DireccionRead, DireccionUpdate
+from app.schemas.pagination import create_paginated_response
 from app.db.session import get_db
 
 router = APIRouter(prefix="/direcciones", tags=["direcciones"])

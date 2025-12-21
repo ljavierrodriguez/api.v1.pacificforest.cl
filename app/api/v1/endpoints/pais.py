@@ -1,7 +1,8 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.orm import Session
 from app.schemas.pais import PaisCreate, PaisRead, PaisUpdate
+from app.schemas.pagination import create_paginated_response
 from app.models.pais import Pais
 from app.db.session import get_db
 

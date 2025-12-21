@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.clase import Clase
 from app.schemas.clase import ClaseCreate, ClaseRead, ClaseUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/clase", tags=["clase"])
 
@@ -18,9 +19,23 @@ def create_clase(payload: ClaseCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[ClaseRead], summary='GET Clase', description='GET Clase endpoint. Replace this placeholder with a meaningful description.')
-def list_clase(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Clase).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Clase', description='GET Clase endpoint. Replace this placeholder with a meaningful description.')
+def list_clase(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Clase).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Clase).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=ClaseRead, summary='GET Clase', description='GET Clase endpoint. Replace this placeholder with a meaningful description.')

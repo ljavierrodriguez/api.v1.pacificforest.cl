@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.unidad_medida import UnidadMedida
 from app.schemas.unidad_medida import UnidadMedidaCreate, UnidadMedidaRead, UnidadMedidaUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/unidad_medida", tags=["unidad_medida"])
 
@@ -23,9 +24,23 @@ def create_unidad_medida(payload: UnidadMedidaCreate, db: Session = Depends(get_
     return obj
 
 
-@router.get("/", response_model=List[UnidadMedidaRead], summary='GET UnidadMedida', description='Obtener lista de unidades de medida con paginación.')
-def list_unidad_medida(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(UnidadMedida).offset(skip).limit(limit).all()
+@router.get("/", summary='GET UnidadMedida', description='Obtener lista de unidades de medida con paginación.')
+def list_unidad_medida(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(UnidadMedida).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(UnidadMedida).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=UnidadMedidaRead, summary='GET UnidadMedida', description='Obtener una unidad de medida específica por ID.')

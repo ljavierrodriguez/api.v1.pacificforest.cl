@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.ple import Ple
 from app.schemas.ple import PleCreate, PleRead, PleUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/ple", tags=["ple"])
 
@@ -18,9 +19,23 @@ def create_ple(payload: PleCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[PleRead], summary='GET Ple', description='GET Ple endpoint. Replace this placeholder with a meaningful description.')
-def list_ple(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Ple).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Ple', description='GET Ple endpoint. Replace this placeholder with a meaningful description.')
+def list_ple(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Ple).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Ple).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=PleRead, summary='GET Ple', description='GET Ple endpoint. Replace this placeholder with a meaningful description.')

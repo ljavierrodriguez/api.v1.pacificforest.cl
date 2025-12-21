@@ -1,7 +1,8 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.schemas.especie import EspecieCreate, EspecieRead, EspecieUpdate
+from app.schemas.pagination import create_paginated_response
 from app.models.especie import Especie
 from app.db.session import get_db
 

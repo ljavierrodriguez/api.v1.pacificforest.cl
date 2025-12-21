@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.puerto import Puerto
 from app.schemas.puerto import PuertoCreate, PuertoRead, PuertoUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/puerto", tags=["puerto"])
 
@@ -18,9 +19,23 @@ def create_puerto(payload: PuertoCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[PuertoRead], summary='GET Puerto', description='GET Puerto endpoint. Replace this placeholder with a meaningful description.')
-def list_puerto(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Puerto).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Puerto', description='GET Puerto endpoint. Replace this placeholder with a meaningful description.')
+def list_puerto(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Puerto).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Puerto).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=PuertoRead, summary='GET Puerto', description='GET Puerto endpoint. Replace this placeholder with a meaningful description.')

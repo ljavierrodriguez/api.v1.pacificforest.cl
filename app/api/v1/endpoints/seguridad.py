@@ -1,7 +1,8 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.schemas.seguridad import SeguridadCreate, SeguridadRead, SeguridadUpdate
+from app.schemas.pagination import create_paginated_response
 from app.models.seguridad import Seguridad
 from app.models.usuario import User
 from app.db.session import get_db

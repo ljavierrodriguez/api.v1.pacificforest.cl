@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.orden_compra import OrdenCompra
 from app.schemas.orden_compra import OrdenCompraCreate, OrdenCompraRead, OrdenCompraUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/orden_compra", tags=["orden_compra"])
 
@@ -42,9 +43,23 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     return obj
 
 
-@router.get("/", response_model=List[OrdenCompraRead], summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.')
-def list_orden_compra(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(OrdenCompra).offset(skip).limit(limit).all()
+@router.get("/", summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.')
+def list_orden_compra(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(OrdenCompra).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(OrdenCompra).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=OrdenCompraRead, summary='GET OrdenCompra', description='Obtener una orden de compra específica por ID.')

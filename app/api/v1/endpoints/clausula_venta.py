@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.clausula_venta import ClausulaVenta
 from app.schemas.clausula_venta import ClausulaVentaCreate, ClausulaVentaRead, ClausulaVentaUpdate
+from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/clausula_venta", tags=["clausula_venta"])
 
