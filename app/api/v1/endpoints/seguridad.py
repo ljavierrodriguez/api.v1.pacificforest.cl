@@ -2,10 +2,13 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.schemas.seguridad import SeguridadCreate, SeguridadRead, SeguridadUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 from app.models.seguridad import Seguridad
 from app.models.usuario import User
 from app.db.session import get_db
+
+# Crear el modelo de respuesta paginada para Seguridad
+PaginatedSeguridadResponse = create_paginated_response_model(SeguridadRead)
 
 router = APIRouter(prefix="/seguridad", tags=["seguridad"])
 
@@ -43,10 +46,23 @@ def create_seguridad(payload: SeguridadCreate, db: Session = Depends(get_db)):
     return seguridad
 
 
-@router.get("/", response_model=List[SeguridadRead], summary='Listar seguridades', description='Lista todos los registros de seguridad.')
-def list_seguridades(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    items = db.query(Seguridad).offset(skip).limit(limit).all()
-    return items
+@router.get("/", response_model=PaginatedSeguridadResponse, summary='Listar seguridades', description='Lista todos los registros de seguridad con paginación.')
+def list_seguridades(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Seguridad).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Seguridad).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{id_seguridad}", response_model=SeguridadRead, summary='Obtener seguridad', description='Obtiene un registro de seguridad por su ID.')

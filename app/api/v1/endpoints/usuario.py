@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.usuario import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para Usuario
+PaginatedUserResponse = create_paginated_response_model(UserRead)
 
 router = APIRouter(prefix="/usuario", tags=["usuario"])
 
@@ -30,10 +33,23 @@ def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
     return user
 
 
-@router.get("/", response_model=List[UserRead], summary='Listar usuarios', description='Lista paginada de usuarios')
-def list_usuarios(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    items = db.query(User).offset(skip).limit(limit).all()
-    return items
+@router.get("/", response_model=PaginatedUserResponse, summary='Listar usuarios', description='Lista paginada de usuarios')
+def list_usuarios(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(User).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(User).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=UserRead, summary='Obtener usuario', description='Obtener usuario por `id_usuario`')

@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.unidad_venta import UnidadVenta
 from app.schemas.unidad_venta import UnidadVentaCreate, UnidadVentaRead, UnidadVentaUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para UnidadVenta
+PaginatedUnidadVentaResponse = create_paginated_response_model(UnidadVentaRead)
 
 router = APIRouter(prefix="/unidad_venta", tags=["unidad_venta"])
 
@@ -24,7 +27,7 @@ def create_unidad_venta(payload: UnidadVentaCreate, db: Session = Depends(get_db
     return obj
 
 
-@router.get("/", summary='GET Unidad Venta', description='GET Unidad Venta endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/", response_model=PaginatedUnidadVentaResponse, summary='GET Unidad Venta', description='Obtener lista de unidades de venta con paginación.')
 def list_unidad_venta(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),

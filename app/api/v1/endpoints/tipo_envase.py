@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.tipo_envase import TipoEnvase
 from app.schemas.tipo_envase import TipoEnvaseCreate, TipoEnvaseRead, TipoEnvaseUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para TipoEnvase
+PaginatedTipoEnvaseResponse = create_paginated_response_model(TipoEnvaseRead)
 
 router = APIRouter(prefix="/tipo_envase", tags=["tipo_envase"])
 
@@ -19,7 +22,7 @@ def create_tipo_envase(payload: TipoEnvaseCreate, db: Session = Depends(get_db))
     return obj
 
 
-@router.get("/", summary='GET Tipo Envase', description='GET Tipo Envase endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/", response_model=PaginatedTipoEnvaseResponse, summary='GET Tipo Envase', description='Obtener lista de tipos de envase con paginación.')
 def list_tipo_envase(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),

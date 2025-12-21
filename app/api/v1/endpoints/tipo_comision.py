@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.tipo_comision import TipoComision
 from app.schemas.tipo_comision import TipoComisionCreate, TipoComisionRead, TipoComisionUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para TipoComision
+PaginatedTipoComisionResponse = create_paginated_response_model(TipoComisionRead)
 
 router = APIRouter(prefix="/tipo_comision", tags=["tipo_comision"])
 
@@ -22,7 +25,7 @@ def create_tipo_comision(payload: TipoComisionCreate, db: Session = Depends(get_
     return obj
 
 
-@router.get("/", summary='GET TipoComision', description='Obtener lista de tipos de comisión con paginación.')
+@router.get("/", response_model=PaginatedTipoComisionResponse, summary='GET TipoComision', description='Obtener lista de tipos de comisión con paginación.')
 def list_tipo_comision(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
