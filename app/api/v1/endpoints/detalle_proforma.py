@@ -32,9 +32,23 @@ def create_detalle_proforma(payload: DetalleProformaCreate, db: Session = Depend
     return obj
 
 
-@router.get("/", response_model=List[DetalleProformaRead], summary='GET Detalle Proforma', description='GET Detalle Proforma endpoint. Replace this placeholder with a meaningful description.')
-def list_detalle_proforma(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(DetalleProforma).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Detalle Proforma', description='GET Detalle Proforma endpoint. Replace this placeholder with a meaningful description.')
+def list_detalle_proforma(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(DetalleProforma).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(DetalleProforma).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=DetalleProformaRead, summary='GET Detalle Proforma', description='GET Detalle Proforma endpoint. Replace this placeholder with a meaningful description.')

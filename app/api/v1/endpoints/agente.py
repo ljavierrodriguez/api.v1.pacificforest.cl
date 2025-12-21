@@ -24,9 +24,23 @@ def create_agente(payload: AgenteCreate, db: Session = Depends(get_db)):
     return a
 
 
-@router.get("/", response_model=List[AgenteRead], summary='GET Agente', description='GET Agente endpoint. Replace this placeholder with a meaningful description.')
-def list_agentes(db: Session = Depends(get_db)):
-    return db.query(Agente).all()
+@router.get("/", summary='GET Agente', description='Obtener lista de agentes con paginación.')
+def list_agentes(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(Agente).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(Agente).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{id_agente}", response_model=AgenteRead, summary='GET Agente por id', description='Obtener un agente por su id.')

@@ -19,9 +19,23 @@ def create_estado_oe(payload: EstadoOeCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[EstadoOeRead], summary='GET Estado Oe', description='GET Estado Oe endpoint. Replace this placeholder with a meaningful description.')
-def list_estado_oe(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(EstadoOe).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Estado Oe', description='GET Estado Oe endpoint. Replace this placeholder with a meaningful description.')
+def list_estado_oe(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(EstadoOe).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(EstadoOe).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=EstadoOeRead, summary='GET Estado Oe', description='GET Estado Oe endpoint. Replace this placeholder with a meaningful description.')

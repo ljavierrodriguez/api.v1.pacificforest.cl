@@ -19,9 +19,23 @@ def create_estado_odc(payload: EstadoOdcCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=List[EstadoOdcRead], summary='GET Estado Odc', description='GET Estado Odc endpoint. Replace this placeholder with a meaningful description.')
-def list_estado_odc(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(EstadoOdc).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Estado Odc', description='GET Estado Odc endpoint. Replace this placeholder with a meaningful description.')
+def list_estado_odc(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(EstadoOdc).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(EstadoOdc).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=EstadoOdcRead, summary='GET Estado Odc', description='GET Estado Odc endpoint. Replace this placeholder with a meaningful description.')

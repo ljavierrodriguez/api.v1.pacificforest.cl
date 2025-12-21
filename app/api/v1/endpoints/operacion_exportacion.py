@@ -23,9 +23,23 @@ def create_operacion(payload: OperacionExportacionCreate, db: Session = Depends(
     return obj
 
 
-@router.get("/", response_model=List[OperacionExportacionRead], summary='GET Operacion Exportacion', description='GET Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
-def list_operacion(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(OperacionExportacion).offset(skip).limit(limit).all()
+@router.get("/", summary='GET Operacion Exportacion', description='GET Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
+def list_operacion(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+    
+    # Obtener total de elementos
+    total_items = db.query(OperacionExportacion).count()
+    
+    # Obtener elementos de la página actual
+    items = db.query(OperacionExportacion).offset(skip).limit(page_size).all()
+    
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
 
 
 @router.get("/{item_id}", response_model=OperacionExportacionRead, summary='GET Operacion Exportacion', description='GET Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
