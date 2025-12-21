@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.forma_pago import FormaPago
 from app.schemas.forma_pago import FormaPagoCreate, FormaPagoRead, FormaPagoUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para FormaPago
+PaginatedFormaPagoResponse = create_paginated_response_model(FormaPagoRead)
 
 router = APIRouter(prefix="/forma_pago", tags=["forma_pago"])
 
@@ -22,7 +25,7 @@ def create_forma_pago(payload: FormaPagoCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", summary='GET FormaPago', description='Obtener lista de formas de pago con paginación.')
+@router.get("/", response_model=PaginatedFormaPagoResponse, summary='GET FormaPago', description='Obtener lista de formas de pago con paginación.')
 def list_forma_pago(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),

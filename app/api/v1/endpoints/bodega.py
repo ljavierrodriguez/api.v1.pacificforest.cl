@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.bodega import Bodega
 from app.schemas.bodega import BodegaCreate, BodegaRead, BodegaUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para Bodega
+PaginatedBodegaResponse = create_paginated_response_model(BodegaRead)
 
 router = APIRouter(prefix="/bodega", tags=["bodega"])
 
@@ -22,7 +25,7 @@ def create_bodega(payload: BodegaCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", summary='GET Bodega', description='Obtener lista de bodegas con paginación.')
+@router.get("/", response_model=PaginatedBodegaResponse, summary='GET Bodega', description='Obtener lista de bodegas con paginación.')
 def list_bodega(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),

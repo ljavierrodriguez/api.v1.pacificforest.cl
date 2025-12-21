@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, TypeVar, Generic
+from typing import List, TypeVar, Generic, Type
 from math import ceil
 
 T = TypeVar('T')
@@ -17,6 +17,19 @@ class PaginationInfo(BaseModel):
 class PaginatedResponse(BaseModel, Generic[T]):
     items: List[T] = Field(..., description="Lista de elementos")
     pagination: PaginationInfo = Field(..., description="Información de paginación")
+
+
+def create_paginated_response_model(item_model: Type[BaseModel]) -> Type[PaginatedResponse]:
+    """
+    Crea un modelo de respuesta paginada específico para un tipo de elemento
+    """
+    class SpecificPaginatedResponse(PaginatedResponse[item_model]):
+        pass
+    
+    # Establecer el nombre del modelo para la documentación
+    SpecificPaginatedResponse.__name__ = f"PaginatedResponse{item_model.__name__}"
+    
+    return SpecificPaginatedResponse
 
 
 def create_paginated_response(

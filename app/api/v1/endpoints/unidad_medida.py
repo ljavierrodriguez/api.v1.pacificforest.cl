@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.unidad_medida import UnidadMedida
 from app.schemas.unidad_medida import UnidadMedidaCreate, UnidadMedidaRead, UnidadMedidaUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para UnidadMedida
+PaginatedUnidadMedidaResponse = create_paginated_response_model(UnidadMedidaRead)
 
 router = APIRouter(prefix="/unidad_medida", tags=["unidad_medida"])
 
@@ -24,7 +27,7 @@ def create_unidad_medida(payload: UnidadMedidaCreate, db: Session = Depends(get_
     return obj
 
 
-@router.get("/", summary='GET UnidadMedida', description='Obtener lista de unidades de medida con paginación.')
+@router.get("/", response_model=PaginatedUnidadMedidaResponse, summary='GET UnidadMedida', description='Obtener lista de unidades de medida con paginación.')
 def list_unidad_medida(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
