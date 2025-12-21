@@ -1,0 +1,21 @@
+# Crear las vistas para los mantenedores 
+
+- Empresa
+- Cliente / Proveedor
+- Detalle de Producto
+    - Especie
+    - Clase
+    - Producto
+- Ubicacion
+    - Pais
+    - Ciudad
+    - Puerto
+- Financiero
+    - Moneda
+    - Forma de Pago
+- Contenedor
+- Unidad de Venta
+- Unidad de Medida
+- Tipo de Comision
+- Agente
+- Seguridad

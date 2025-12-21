@@ -43,6 +43,10 @@ from .usuario import router as usuario_router
 from .seguridad import router as seguridad_router
 from .forma_pago import router as forma_pago_router
 from .unidad_medida import router as unidad_medida_router
+from .bodega import router as bodega_router
+from .naviera import router as naviera_router
+from .tipo_comision import router as tipo_comision_router
+from .orden_compra import router as orden_compra_router
 
 router = APIRouter()
 
@@ -89,4 +93,8 @@ router.include_router(usuario_router)
 router.include_router(seguridad_router)
 router.include_router(forma_pago_router)
 router.include_router(unidad_medida_router)
+router.include_router(bodega_router)
+router.include_router(naviera_router)
+router.include_router(tipo_comision_router)
+router.include_router(orden_compra_router)
 
