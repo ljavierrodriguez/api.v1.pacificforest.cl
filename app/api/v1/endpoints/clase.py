@@ -12,7 +12,7 @@ router = APIRouter(prefix="/clase", tags=["clase"])
 
 @router.post("/", response_model=ClaseRead, summary='POST Clase', description='POST Clase endpoint. Replace this placeholder with a meaningful description.')
 def create_clase(payload: ClaseCreate, db: Session = Depends(get_db)):
-    obj = Clase(nombre=payload.nombre)
+    obj = Clase(nombre=payload.nombre, descripcion=payload.descripcion)
     db.add(obj)
     db.commit()
     db.refresh(obj)
