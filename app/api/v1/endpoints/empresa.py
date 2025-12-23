@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.empresa import Empresa
 from app.schemas.empresa import EmpresaCreate, EmpresaRead, EmpresaUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para Empresa
+PaginatedEmpresaResponse = create_paginated_response_model(EmpresaRead)
 
 router = APIRouter(prefix="/empresa", tags=["empresa"])
 
@@ -33,7 +36,7 @@ def create_empresa(payload: EmpresaCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", summary='GET Empresas', description='Obtener lista paginada de empresas.')
+@router.get("/", response_model=PaginatedEmpresaResponse, summary='GET Empresas', description='Obtener lista paginada de empresas.')
 def list_empresa(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),

@@ -9,7 +9,10 @@ from app.schemas.cliente_proveedor import (
     ClienteProveedorRead,
     ClienteProveedorUpdate,
 )
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para ClienteProveedor
+PaginatedClienteProveedorResponse = create_paginated_response_model(ClienteProveedorRead)
 
 router = APIRouter(prefix="/cliente_proveedor", tags=["cliente_proveedor"])
 
@@ -33,7 +36,7 @@ def create_cliente_proveedor(
     return obj
 
 
-@router.get("/", summary='GET Cliente Proveedor', description='Obtener lista de clientes/proveedores con paginación.')
+@router.get("/", response_model=PaginatedClienteProveedorResponse, summary='GET Cliente Proveedor', description='Obtener lista de clientes/proveedores con paginación.')
 def list_cliente_proveedor(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),

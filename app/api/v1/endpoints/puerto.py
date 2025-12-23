@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.puerto import Puerto
 from app.schemas.puerto import PuertoCreate, PuertoRead, PuertoUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para Puerto
+PaginatedPuertoResponse = create_paginated_response_model(PuertoRead)
 
 router = APIRouter(prefix="/puerto", tags=["puerto"])
 
@@ -19,7 +22,7 @@ def create_puerto(payload: PuertoCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", summary='GET Puerto', description='GET Puerto endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/", response_model=PaginatedPuertoResponse, summary='GET Puerto', description='Obtener lista de puertos con paginación.')
 def list_puerto(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
