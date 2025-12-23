@@ -10,13 +10,22 @@ from app.schemas.pagination import create_paginated_response
 router = APIRouter(prefix="/empresa", tags=["empresa"])
 
 
-@router.post("/", response_model=EmpresaRead, summary='POST Empresa', description='POST Empresa endpoint. Replace this placeholder with a meaningful description.')
+@router.post("/", response_model=EmpresaRead, summary='POST Empresa', description='Crear una nueva empresa con todos los datos requeridos.')
 def create_empresa(payload: EmpresaCreate, db: Session = Depends(get_db)):
     obj = Empresa(
         rut=payload.rut,
-        razon_social=payload.razon_social,
         nombre_fantasia=payload.nombre_fantasia,
-        correo=str(payload.correo) if payload.correo else None,
+        razon_social=payload.razon_social,
+        direccion=payload.direccion,
+        telefono_1=payload.telefono_1,
+        telefono_2=payload.telefono_2,
+        giro=payload.giro,
+        id_ciudad=payload.id_ciudad,
+        es_vigente=payload.es_vigente,
+        en_proforma=payload.en_proforma,
+        en_odc=payload.en_odc,
+        por_defecto=payload.por_defecto,
+        url_logo=payload.url_logo,
     )
     db.add(obj)
     db.commit()
@@ -24,7 +33,7 @@ def create_empresa(payload: EmpresaCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", summary='GET Empresa', description='GET Empresa endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/", summary='GET Empresas', description='Obtener lista paginada de empresas.')
 def list_empresa(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
@@ -43,7 +52,7 @@ def list_empresa(
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=EmpresaRead, summary='GET Empresa', description='GET Empresa endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/{item_id}", response_model=EmpresaRead, summary='GET Empresa', description='Obtener una empresa específica por su ID.')
 def get_empresa(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Empresa, item_id)
     if not item:
@@ -51,7 +60,7 @@ def get_empresa(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-@router.put("/{item_id}", response_model=EmpresaRead, summary='PUT Empresa', description='PUT Empresa endpoint. Replace this placeholder with a meaningful description.')
+@router.put("/{item_id}", response_model=EmpresaRead, summary='PUT Empresa', description='Actualizar una empresa existente.')
 def update_empresa(item_id: int, payload: EmpresaUpdate, db: Session = Depends(get_db)):
     item = db.get(Empresa, item_id)
     if not item:
@@ -64,7 +73,7 @@ def update_empresa(item_id: int, payload: EmpresaUpdate, db: Session = Depends(g
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE Empresa', description='DELETE Empresa endpoint. Replace this placeholder with a meaningful description.')
+@router.delete("/{item_id}", summary='DELETE Empresa', description='Eliminar una empresa por su ID.')
 def delete_empresa(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Empresa, item_id)
     if not item:
