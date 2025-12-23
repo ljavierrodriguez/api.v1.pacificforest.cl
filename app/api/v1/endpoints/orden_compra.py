@@ -5,7 +5,10 @@ from typing import List
 from app.db.session import get_db
 from app.models.orden_compra import OrdenCompra
 from app.schemas.orden_compra import OrdenCompraCreate, OrdenCompraRead, OrdenCompraUpdate
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para OrdenCompra
+PaginatedOrdenCompraResponse = create_paginated_response_model(OrdenCompraRead)
 
 router = APIRouter(prefix="/orden_compra", tags=["orden_compra"])
 
@@ -43,7 +46,7 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     return obj
 
 
-@router.get("/", summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.')
+@router.get("/", response_model=PaginatedOrdenCompraResponse, summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.')
 def list_orden_compra(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
