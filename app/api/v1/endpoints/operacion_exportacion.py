@@ -9,21 +9,33 @@ OperacionExportacionCreate,
     OperacionExportacionRead,
     OperacionExportacionUpdate,
 )
-from app.schemas.pagination import create_paginated_response
+from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+
+# Crear el modelo de respuesta paginada para OperacionExportacion
+PaginatedOperacionExportacionResponse = create_paginated_response_model(OperacionExportacionRead)
 
 router = APIRouter(prefix="/operacion_exportacion", tags=["operacion_exportacion"])
 
 
-@router.post("/", response_model=OperacionExportacionRead, summary='POST Operacion Exportacion', description='POST Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
+@router.post("/", response_model=OperacionExportacionRead, status_code=201, summary='POST Operacion Exportacion', description='Crear una nueva operación de exportación.')
 def create_operacion(payload: OperacionExportacionCreate, db: Session = Depends(get_db)):
-    obj = OperacionExportacion(referencia=payload.referencia, fecha_operacion=payload.fecha_operacion)
+    obj = OperacionExportacion(
+        facturar_a=payload.facturar_a,
+        consignar_a=payload.consignar_a,
+        notificar_a=payload.notificar_a,
+        id_puerto_origen=payload.id_puerto_origen,
+        id_puerto_destino=payload.id_puerto_destino,
+        id_forma_pago=payload.id_forma_pago,
+        id_estado_oe=payload.id_estado_oe,
+        fecha=payload.fecha
+    )
     db.add(obj)
     db.commit()
     db.refresh(obj)
     return obj
 
 
-@router.get("/", summary='GET Operacion Exportacion', description='GET Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/", response_model=PaginatedOperacionExportacionResponse, summary='GET Operacion Exportacion', description='Obtener lista de operaciones de exportación con paginación.')
 def list_operacion(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
@@ -42,7 +54,7 @@ def list_operacion(
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=OperacionExportacionRead, summary='GET Operacion Exportacion', description='GET Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/{item_id}", response_model=OperacionExportacionRead, summary='GET Operacion Exportacion', description='Obtener una operación de exportación específica por ID.')
 def get_operacion(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OperacionExportacion, item_id)
     if not item:
@@ -50,7 +62,7 @@ def get_operacion(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-@router.put("/{item_id}", response_model=OperacionExportacionRead, summary='PUT Operacion Exportacion', description='PUT Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
+@router.put("/{item_id}", response_model=OperacionExportacionRead, summary='PUT Operacion Exportacion', description='Actualizar una operación de exportación existente.')
 def update_operacion(item_id: int, payload: OperacionExportacionUpdate, db: Session = Depends(get_db)):
     item = db.get(OperacionExportacion, item_id)
     if not item:
@@ -63,7 +75,7 @@ def update_operacion(item_id: int, payload: OperacionExportacionUpdate, db: Sess
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE Operacion Exportacion', description='DELETE Operacion Exportacion endpoint. Replace this placeholder with a meaningful description.')
+@router.delete("/{item_id}", summary='DELETE Operacion Exportacion', description='Eliminar una operación de exportación.')
 def delete_operacion(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OperacionExportacion, item_id)
     if not item:
