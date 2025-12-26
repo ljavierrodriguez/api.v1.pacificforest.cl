@@ -15,7 +15,7 @@ class EmpresaCreate(BaseModel):
     en_proforma: Optional[bool] = Field(default=False, description="Indica si aparece en proformas")
     en_odc: Optional[bool] = Field(default=False, description="Indica si aparece en órdenes de compra")
     por_defecto: Optional[bool] = Field(default=False, description="Indica si es la empresa por defecto")
-    url_logo: str = Field(..., description="URL del logo de la empresa (texto largo permitido)")
+    url_logo: Optional[str] = Field(..., description="URL del logo de la empresa (texto largo permitido)")
 
     model_config = ConfigDict(json_schema_extra={
         "examples": [{
