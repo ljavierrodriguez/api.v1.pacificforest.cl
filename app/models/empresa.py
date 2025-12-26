@@ -32,7 +32,7 @@ class Empresa(Base):
     en_proforma = Column(Boolean, default=False, nullable=False)
     en_odc = Column(Boolean, default=False, nullable=False)
     por_defecto = Column(Boolean, default=False, nullable=False)
-    url_logo = Column(Text(), nullable=False)
+    url_logo = Column(Text(), nullable=True)
 
     __table_args__ = (
         # si tu BD lo permite, es buena idea que el RUT sea único
