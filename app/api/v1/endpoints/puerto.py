@@ -13,9 +13,13 @@ PaginatedPuertoResponse = create_paginated_response_model(PuertoRead)
 router = APIRouter(prefix="/puerto", tags=["puerto"])
 
 
-@router.post("/", response_model=PuertoRead, summary='POST Puerto', description='POST Puerto endpoint. Replace this placeholder with a meaningful description.')
+@router.post("/", response_model=PuertoRead, summary='POST Puerto', description='Crear un nuevo puerto.')
 def create_puerto(payload: PuertoCreate, db: Session = Depends(get_db)):
-    obj = Puerto(nombre=payload.nombre, codigo=payload.codigo)
+    obj = Puerto(
+        nombre=payload.nombre, 
+        #codigo=payload.codigo,
+        descripcion=payload.descripcion
+    )
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -41,7 +45,7 @@ def list_puerto(
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=PuertoRead, summary='GET Puerto', description='GET Puerto endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/{item_id}", response_model=PuertoRead, summary='GET Puerto', description='Obtener un puerto específico por ID.')
 def get_puerto(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Puerto, item_id)
     if not item:
@@ -49,7 +53,7 @@ def get_puerto(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-@router.put("/{item_id}", response_model=PuertoRead, summary='PUT Puerto', description='PUT Puerto endpoint. Replace this placeholder with a meaningful description.')
+@router.put("/{item_id}", response_model=PuertoRead, summary='PUT Puerto', description='Actualizar un puerto existente.')
 def update_puerto(item_id: int, payload: PuertoUpdate, db: Session = Depends(get_db)):
     item = db.get(Puerto, item_id)
     if not item:
@@ -62,7 +66,7 @@ def update_puerto(item_id: int, payload: PuertoUpdate, db: Session = Depends(get
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE Puerto', description='DELETE Puerto endpoint. Replace this placeholder with a meaningful description.')
+@router.delete("/{item_id}", summary='DELETE Puerto', description='Eliminar un puerto.')
 def delete_puerto(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Puerto, item_id)
     if not item:
