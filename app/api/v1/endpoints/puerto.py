@@ -18,6 +18,7 @@ def create_puerto(payload: PuertoCreate, db: Session = Depends(get_db)):
     obj = Puerto(
         nombre=payload.nombre, 
         #codigo=payload.codigo,
+        id_ciudad=payload.id_ciudad,
         descripcion=payload.descripcion
     )
     db.add(obj)
