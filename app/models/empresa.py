@@ -1,5 +1,5 @@
 from __future__ import annotations
-from sqlalchemy import event, update, UniqueConstraint, Integer, String, Boolean, ForeignKey, Column
+from sqlalchemy import event, update, UniqueConstraint, Integer, String, Boolean, ForeignKey, Column, Text
 from app.db.base import Base
 
 def rut_unformat(rut: str) -> str:
@@ -32,7 +32,7 @@ class Empresa(Base):
     en_proforma = Column(Boolean, default=False, nullable=False)
     en_odc = Column(Boolean, default=False, nullable=False)
     por_defecto = Column(Boolean, default=False, nullable=False)
-    url_logo = Column(String(100), nullable=False)
+    url_logo = Column(Text(), nullable=False)
 
     __table_args__ = (
         # si tu BD lo permite, es buena idea que el RUT sea único

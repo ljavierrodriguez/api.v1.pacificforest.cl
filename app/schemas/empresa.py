@@ -15,7 +15,7 @@ class EmpresaCreate(BaseModel):
     en_proforma: Optional[bool] = Field(default=False, description="Indica si aparece en proformas")
     en_odc: Optional[bool] = Field(default=False, description="Indica si aparece en órdenes de compra")
     por_defecto: Optional[bool] = Field(default=False, description="Indica si es la empresa por defecto")
-    url_logo: str = Field(..., description="URL del logo de la empresa")
+    url_logo: str = Field(..., description="URL del logo de la empresa (texto largo permitido)")
 
     model_config = ConfigDict(json_schema_extra={
         "examples": [{
@@ -45,7 +45,7 @@ class EmpresaRead(BaseModel):
     en_proforma: bool = Field(..., description="Indica si aparece en proformas")
     en_odc: bool = Field(..., description="Indica si aparece en órdenes de compra")
     por_defecto: bool = Field(..., description="Indica si es la empresa por defecto")
-    url_logo: str = Field(..., description="URL del logo de la empresa")
+    url_logo: str = Field(..., description="URL del logo de la empresa (texto largo permitido)")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -63,6 +63,6 @@ class EmpresaUpdate(BaseModel):
     en_proforma: Optional[bool] = Field(default=None, description="Indica si aparece en proformas")
     en_odc: Optional[bool] = Field(default=None, description="Indica si aparece en órdenes de compra")
     por_defecto: Optional[bool] = Field(default=None, description="Indica si es la empresa por defecto")
-    url_logo: Optional[str] = Field(default=None, description="URL del logo de la empresa")
+    url_logo: Optional[str] = Field(default=None, description="URL del logo de la empresa (texto largo permitido)")
     
     model_config = ConfigDict()
