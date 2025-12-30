@@ -78,11 +78,41 @@ def update_cliente_proveedor(
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE Cliente Proveedor', description='DELETE Cliente Proveedor endpoint. Replace this placeholder with a meaningful description.')
+@router.delete("/{item_id}", summary='DELETE Cliente Proveedor', description='Eliminar un cliente/proveedor.')
 def delete_cliente_proveedor(item_id: int, db: Session = Depends(get_db)):
     item = db.get(ClienteProveedor, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="ClienteProveedor not found")
+    
+    # Verificar relaciones asociadas
+    contactos_count = item.Contactos.count()
+    direcciones_count = item.Direcciones.count()
+    ordenes_count = item.OrdenesCompra.count()
+    operaciones_facturar = item.OperacionesFacturar.count()
+    operaciones_consignar = item.OperacionesConsignar.count()
+    operaciones_notificar = item.OperacionesNotificar.count()
+    
+    total_relaciones = (contactos_count + direcciones_count + ordenes_count + 
+                       operaciones_facturar + operaciones_consignar + operaciones_notificar)
+    
+    if total_relaciones > 0:
+        detalles = []
+        if contactos_count > 0:
+            detalles.append(f"{contactos_count} contacto(s)")
+        if direcciones_count > 0:
+            detalles.append(f"{direcciones_count} dirección(es)")
+        if ordenes_count > 0:
+            detalles.append(f"{ordenes_count} orden(es) de compra")
+        if operaciones_facturar > 0:
+            detalles.append(f"{operaciones_facturar} operación(es) de facturación")
+        if operaciones_consignar > 0:
+            detalles.append(f"{operaciones_consignar} operación(es) de consignación")
+        if operaciones_notificar > 0:
+            detalles.append(f"{operaciones_notificar} operación(es) de notificación")
+        
+        mensaje = f"No se puede eliminar el cliente/proveedor porque tiene: {', '.join(detalles)}"
+        raise HTTPException(status_code=400, detail=mensaje)
+    
     db.delete(item)
     db.commit()
     return {"ok": True}

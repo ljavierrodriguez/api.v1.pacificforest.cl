@@ -72,6 +72,18 @@ def delete_puerto(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Puerto, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Puerto not found")
+    
+    # Verificar si tiene operaciones de exportación como origen o destino
+    operaciones_origen = item.OperacionOrigen.count()
+    operaciones_destino = item.OperacionDestino.count()
+    
+    if operaciones_origen > 0 or operaciones_destino > 0:
+        total_operaciones = operaciones_origen + operaciones_destino
+        raise HTTPException(
+            status_code=400, 
+            detail=f"No se puede eliminar el puerto porque tiene {total_operaciones} operación(es) de exportación asociada(s)"
+        )
+    
     db.delete(item)
     db.commit()
     return {"ok": True}

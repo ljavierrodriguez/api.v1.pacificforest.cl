@@ -81,6 +81,24 @@ def delete_empresa(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Empresa, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Empresa not found")
+    
+    # No permitir eliminar la empresa por defecto
+    if item.por_defecto:
+        raise HTTPException(
+            status_code=400, 
+            detail="No se puede eliminar la empresa por defecto"
+        )
+    
+    # Verificar si tiene proformas asociadas (necesito importar el modelo)
+    from app.models.proforma import Proforma
+    proformas_count = db.query(Proforma).filter(Proforma.id_empresa == item_id).count()
+    
+    if proformas_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"No se puede eliminar la empresa porque tiene {proformas_count} proforma(s) asociada(s)"
+        )
+    
     db.delete(item)
     db.commit()
     return {"ok": True}

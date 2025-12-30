@@ -91,10 +91,38 @@ def delete_orden_compra(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="OrdenCompra not found")
+    
     try:
+        # Verificar si tiene detalles asociados
+        from app.models.detalle_orden_compra import DetalleOrdenCompra
+        detalles_count = db.query(DetalleOrdenCompra).filter(
+            DetalleOrdenCompra.id_orden_compra == item_id
+        ).count()
+        
+        if detalles_count > 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No se puede eliminar la orden de compra porque tiene {detalles_count} detalle(s) asociado(s)"
+            )
+        
+        # Verificar si tiene contactos asociados
+        from app.models.contacto_orden_compra import ContactoOrdenCompra
+        contactos_count = db.query(ContactoOrdenCompra).filter(
+            ContactoOrdenCompra.id_orden_compra == item_id
+        ).count()
+        
+        if contactos_count > 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No se puede eliminar la orden de compra porque tiene {contactos_count} contacto(s) asociado(s)"
+            )
+        
         db.delete(item)
         db.commit()
         return {"ok": True}
-    except ValueError as e:
+        
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"Error al eliminar la orden de compra: {str(e)}")
