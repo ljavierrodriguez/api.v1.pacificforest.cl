@@ -13,6 +13,7 @@ class ProformaCreate(BaseModel):
     id_agente: Optional[int] = Field(None, description="ID del agente")
     id_tipo_comision: Optional[int] = Field(None, description="ID del tipo de comisión")
     id_clausula_venta: Optional[str] = Field(None, description="ID de la cláusula de venta")
+    id_forma_pago: Optional[int] = Field(None, description="ID de la forma de pago")
     cantidad_contenedor: Optional[int] = Field(None, description="Cantidad de contenedores")
     fecha_emision: date = Field(..., description="Fecha de emisión de la proforma")
     fecha_aceptacion: Optional[date] = Field(None, description="Fecha de aceptación")
@@ -35,6 +36,7 @@ class ProformaCreate(BaseModel):
             "id_direccion_facturar": 1,
             "id_direccion_consignar": 1,
             "id_direccion_notificar": 1,
+            "id_forma_pago": 1,
             "especificaciones": "Especificaciones de la proforma",
             "valor_flete": "1000.50"
         }]
@@ -51,6 +53,7 @@ class ProformaRead(BaseModel):
     id_agente: Optional[int] = Field(None, description="ID del agente")
     id_tipo_comision: Optional[int] = Field(None, description="ID del tipo de comisión")
     id_clausula_venta: Optional[str] = Field(None, description="ID de la cláusula de venta")
+    id_forma_pago: Optional[int] = Field(None, description="ID de la forma de pago")
     cantidad_contenedor: Optional[int] = Field(None, description="Cantidad de contenedores")
     fecha_emision: date = Field(..., description="Fecha de emisión de la proforma")
     fecha_aceptacion: Optional[date] = Field(None, description="Fecha de aceptación")
@@ -78,6 +81,7 @@ class ProformaUpdate(BaseModel):
     id_agente: Optional[int] = Field(None, description="ID del agente")
     id_tipo_comision: Optional[int] = Field(None, description="ID del tipo de comisión")
     id_clausula_venta: Optional[str] = Field(None, description="ID de la cláusula de venta")
+    id_forma_pago: Optional[int] = Field(None, description="ID de la forma de pago")
     cantidad_contenedor: Optional[int] = Field(None, description="Cantidad de contenedores")
     fecha_emision: Optional[date] = Field(None, description="Fecha de emisión de la proforma")
     fecha_aceptacion: Optional[date] = Field(None, description="Fecha de aceptación")
