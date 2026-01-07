@@ -39,7 +39,7 @@ class DetalleProforma(Base):
     )
     Producto = relationship(
         "Producto",
-        primaryjoin="foreign(DetalleProforma.id_producto)==Producto.id_producto",
+        foreign_keys=[id_producto],
         viewonly=True,
     )
     UnidadVenta = relationship(
@@ -67,13 +67,12 @@ class DetalleProforma(Base):
         return f"<DetalleProforma {self.id_detalle_proforma}>"
 
     def to_dict(self):
-        return {
+        result = {
             "id_detalle_proforma": self.id_detalle_proforma,
             "id_proforma": self.id_proforma,
             "id_producto": self.id_producto,
-            "texto_libre": self.texto_libre,
             "id_unidad_venta": self.id_unidad_venta,
-            "cantidad": self.cantidad,
+            "texto_libre": self.texto_libre,
             "espesor": self.espesor,
             "id_unidad_medida_espesor": self.id_unidad_medida_espesor,
             "ancho": self.ancho,
@@ -81,12 +80,26 @@ class DetalleProforma(Base):
             "largo": self.largo,
             "id_unidad_medida_largo": self.id_unidad_medida_largo,
             "piezas": self.piezas,
+            "cantidad": self.cantidad,
             "precio_unitario": self.precio_unitario,
             "subtotal": self.subtotal,
             "volumen": self.volumen,
             "volumen_eq": self.volumen_eq,
             "precio_eq": self.precio_eq,
         }
+        
+        # Incluir datos básicos del producto si está cargado
+        if self.Producto is not None:
+            result["producto"] = {
+                "id_producto": self.Producto.id_producto,
+                "nombre_producto_esp": self.Producto.nombre_producto_esp,
+                "nombre_producto_ing": self.Producto.nombre_producto_ing,
+                "obs_calidad": self.Producto.obs_calidad,
+            }
+        else:
+            result["producto"] = None
+            
+        return result
 
 
 
