@@ -51,19 +51,38 @@ alembic revision -m "Descripción de los cambios"
 alembic revision --autogenerate -m "Descripción de los cambios"
 ```
 
-## Migración Actual: Agregar id_forma_pago
+## Historial de Migraciones
+
+### 002: Agregar columnas de snapshot a proforma y detalle_proforma
+
+La migración `002_add_snapshot_columns_to_proforma.py` implementa inmutabilidad de datos mediante snapshots:
+
+**Tabla `proforma`:**
+- **Agrega:** Columnas de snapshot de empresa (nombre_fantasia, razon_social, rut, direccion, giro)
+- **Agrega:** Columnas de snapshot de dirección de facturación (texto, ciudad, pais, fono_1)
+- **Agrega:** Columnas de snapshot de dirección de consignación (texto, ciudad, pais, fono_1)
+- **Agrega:** Columnas de snapshot de dirección de notificación (texto, ciudad, pais, fono_1)
+- **Backfill:** Puebla snapshots de registros existentes con datos actuales de master data
+
+**Tabla `detalle_proforma`:**
+- **Agrega:** Columnas de snapshot de producto (nombre_esp, nombre_ing, obs_calidad, especie)
+- **Backfill:** Puebla snapshots de registros existentes con datos actuales de productos
+
+**Propósito:** Preservar datos históricos de proformas. Los snapshots capturan el estado de empresas, direcciones y productos al momento de crear la proforma, evitando que cambios posteriores en master data afecten documentos históricos.
+
+### 001: Agregar id_forma_pago
 
 La migración `001_add_id_forma_pago_to_proforma.py` agrega el campo `id_forma_pago` a la tabla `proforma`:
 
 - **Agrega:** Columna `id_forma_pago` (INTEGER, nullable)
 - **Agrega:** Foreign key constraint hacia `forma_pago.id_forma_pago`
 
-### Para aplicar esta migración:
+### Para aplicar migraciones:
 ```bash
 python migrate.py
 ```
 
-### Para revertir esta migración:
+### Para revertir última migración:
 ```bash
 alembic downgrade -1
 ```
@@ -78,7 +97,8 @@ api.v1.pacificforest.cl/
 │   ├── env.py                 # Configuración del entorno
 │   ├── script.py.mako         # Template para nuevas migraciones
 │   └── versions/              # Archivos de migración
-│       └── 001_add_id_forma_pago_to_proforma.py
+│       ├── 001_add_id_forma_pago_to_proforma.py
+│       └── 002_add_snapshot_columns_to_proforma.py
 └── app/
     ├── models/                # Modelos SQLAlchemy
     └── db/                    # Configuración de base de datos

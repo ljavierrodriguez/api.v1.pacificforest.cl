@@ -64,7 +64,13 @@ class DetalleProformaRead(BaseModel):
     volumen_eq: str = Field(..., description="Volumen equivalente")
     precio_eq: str = Field(..., description="Precio equivalente")
     
-    # Datos básicos del producto (anidados)
+    # Product snapshot fields (immutable historical data)
+    producto_nombre_esp: Optional[str] = Field(None, description="Snapshot: Nombre del producto en español")
+    producto_nombre_ing: Optional[str] = Field(None, description="Snapshot: Nombre del producto en inglés")
+    producto_obs_calidad: Optional[str] = Field(None, description="Snapshot: Observaciones de calidad")
+    producto_especie: Optional[str] = Field(None, description="Snapshot: Nombre de la especie")
+    
+    # Datos básicos del producto (anidados) - mantener para compatibilidad
     producto: Optional[ProductoBasico] = Field(None, description="Datos básicos del producto")
 
     model_config = ConfigDict(from_attributes=True)

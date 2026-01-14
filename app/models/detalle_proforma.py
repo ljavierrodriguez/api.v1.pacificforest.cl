@@ -32,6 +32,12 @@ class DetalleProforma(Base):
     volumen_eq = Column(String(12), nullable=False)
     precio_eq = Column(String(12), nullable=False)
 
+    # Product snapshot fields (immutable historical data)
+    producto_nombre_esp = Column(String(100))
+    producto_nombre_ing = Column(String(100))
+    producto_obs_calidad = Column(String(2000))
+    producto_especie = Column(String(100))
+
     Proforma = relationship(
         "Proforma",
         primaryjoin="foreign(DetalleProforma.id_proforma)==Proforma.id_proforma",
@@ -88,7 +94,27 @@ class DetalleProforma(Base):
             "precio_eq": self.precio_eq,
         }
         
-        # Incluir datos básicos del producto si está cargado
+        # Include product snapshot data (with fallback to current Producto)
+        if self.producto_nombre_esp:
+            # Use snapshot data (prioritize historical accuracy)
+            result["producto_snapshot"] = {
+                "nombre_esp": self.producto_nombre_esp,
+                "nombre_ing": self.producto_nombre_ing,
+                "obs_calidad": self.producto_obs_calidad,
+                "especie": self.producto_especie,
+            }
+        elif self.Producto is not None:
+            # Fallback to current producto data for backward compatibility
+            result["producto_snapshot"] = {
+                "nombre_esp": self.Producto.nombre_producto_esp,
+                "nombre_ing": self.Producto.nombre_producto_ing,
+                "obs_calidad": self.Producto.obs_calidad,
+                "especie": self.Producto.Especie.nombre_esp if self.Producto.Especie else None,
+            }
+        else:
+            result["producto_snapshot"] = None
+        
+        # Keep legacy producto field for backward compatibility
         if self.Producto is not None:
             result["producto"] = {
                 "id_producto": self.Producto.id_producto,
@@ -101,6 +127,66 @@ class DetalleProforma(Base):
             
         return result
 
+
+
+# Populate product snapshot fields automatically when creating a detalle_proforma
+@event.listens_for(DetalleProforma, "before_insert")
+def populate_detalle_snapshots(mapper, connection, target):
+    """
+    Automatically populate product snapshot fields when creating a detalle_proforma.
+    Captures immutable copies of producto data at creation time.
+    """
+    from sqlalchemy import select
+    from app.models.producto import Producto
+    from app.models.especie import Especie
+    
+    if target.id_producto:
+        producto_stmt = select(Producto).where(Producto.id_producto == target.id_producto)
+        producto = connection.execute(producto_stmt).scalar_one_or_none()
+        
+        if producto:
+            target.producto_nombre_esp = producto.nombre_producto_esp
+            target.producto_nombre_ing = producto.nombre_producto_ing
+            target.producto_obs_calidad = producto.obs_calidad
+            
+            # Fetch especie if available
+            if producto.id_especie:
+                especie_stmt = select(Especie).where(Especie.id_especie == producto.id_especie)
+                especie = connection.execute(especie_stmt).scalar_one_or_none()
+                if especie:
+                    target.producto_especie = especie.nombre_esp
+
+
+# Protect product snapshot immutability - prevent updates to snapshot fields
+@event.listens_for(DetalleProforma, "before_update")
+def protect_detalle_snapshots(mapper, connection, target):
+    """
+    Ensure product snapshot fields remain immutable after creation.
+    Restores original snapshot values even if update attempts to change them.
+    """
+    # Get the current state from the session
+    state = target._sa_instance_state
+    
+    # List of all product snapshot field names
+    snapshot_fields = [
+        'producto_nombre_esp', 'producto_nombre_ing', 
+        'producto_obs_calidad', 'producto_especie'
+    ]
+    
+    # Check if any snapshot fields have been modified
+    history = state.get_history('producto_nombre_esp', True)
+    if history.has_changes():
+        # If snapshots are being modified, restore original values from database
+        from sqlalchemy import select
+        original_stmt = select(DetalleProforma).where(
+            DetalleProforma.id_detalle_proforma == target.id_detalle_proforma
+        )
+        original = connection.execute(original_stmt).scalar_one_or_none()
+        
+        if original:
+            # Restore all snapshot fields to their original values
+            for field in snapshot_fields:
+                setattr(target, field, getattr(original, field))
 
 
 # ===== Hook equivalente a beforeValidate() de Yii =====
