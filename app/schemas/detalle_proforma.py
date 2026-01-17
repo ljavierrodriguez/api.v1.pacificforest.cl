@@ -70,6 +70,15 @@ class DetalleProformaRead(BaseModel):
     producto_obs_calidad: Optional[str] = Field(None, description="Snapshot: Observaciones de calidad")
     producto_especie: Optional[str] = Field(None, description="Snapshot: Nombre de la especie")
     
+    # Especie fields (dynamic from current relationships)
+    id_especie: Optional[int] = Field(None, description="ID de la especie del producto")
+    nombre_especie_esp: Optional[str] = Field(None, description="Nombre de la especie en español")
+    nombre_especie_ing: Optional[str] = Field(None, description="Nombre de la especie en inglés")
+    
+    # Clase fields (dynamic from current relationships)
+    id_clase: Optional[int] = Field(None, description="ID de la clase del producto")
+    nombre_clase: Optional[str] = Field(None, description="Nombre de la clase")
+    
     # Datos básicos del producto (anidados) - mantener para compatibilidad
     producto: Optional[ProductoBasico] = Field(None, description="Datos básicos del producto")
 
