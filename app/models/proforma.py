@@ -18,7 +18,7 @@ class Proforma(Base):
     id_agente                = Column(Integer, ForeignKey("agente.id_agente"))
     id_tipo_comision         = Column(Integer, ForeignKey("tipo_comision.id_tipo_comision"))
     id_clausula_venta        = Column(String(10), ForeignKey("clausula_venta.id_clausula_venta"))
-    id_forma_pago            = Column(Integer, ForeignKey("forma_pago.id_forma_pago"))
+    #id_forma_pago            = Column(Integer, ForeignKey("forma_pago.id_forma_pago"))
     cantidad_contenedor      = Column(Integer)
     fecha_emision            = Column(Date, nullable=False)
     fecha_aceptacion         = Column(Date)
