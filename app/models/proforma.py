@@ -280,14 +280,15 @@ def populate_proforma_snapshots(mapper, connection, target):
     try:
         # Populate empresa snapshots
         if target.id_empresa:
-            empresa_stmt = select(Empresa).where(Empresa.id_empresa == target.id_empresa)
-            empresa = connection.execute(empresa_stmt).scalar_one_or_none()
-            if empresa:
-                target.empresa_nombre_fantasia = empresa.nombre_fantasia
-                target.empresa_razon_social = empresa.razon_social
-                target.empresa_rut = empresa.rut
-                target.empresa_direccion = empresa.direccion
-                target.empresa_giro = empresa.giro
+            session = target._sa_instance_state.session
+            if session:
+                empresa = session.get(Empresa, target.id_empresa)
+                if empresa:
+                    target.empresa_nombre_fantasia = empresa.nombre_fantasia
+                    target.empresa_razon_social = empresa.razon_social
+                    target.empresa_rut = empresa.rut
+                    target.empresa_direccion = empresa.direccion
+                    target.empresa_giro = empresa.giro
     except Exception as e:
         print(f"Error populating empresa snapshot: {e}")
         pass
@@ -295,19 +296,20 @@ def populate_proforma_snapshots(mapper, connection, target):
     try:
         # Populate billing address snapshots
         if target.id_direccion_facturar:
-            dir_stmt = select(Direccion, Ciudad, Pais).join(
-                Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
-            ).join(
-                Pais, Ciudad.id_pais == Pais.id_pais
-            ).where(Direccion.id_direccion == target.id_direccion_facturar)
-            
-            result = connection.execute(dir_stmt).first()
-            if result:
-                direccion, ciudad, pais = result
-                target.direccion_facturar_texto = direccion.direccion
-                target.direccion_facturar_ciudad = ciudad.nombre
-                target.direccion_facturar_pais = pais.nombre
-                target.direccion_facturar_fono_1 = direccion.fono_1
+            session = target._sa_instance_state.session
+            if session:
+                direccion = session.get(Direccion, target.id_direccion_facturar)
+                if direccion:
+                    target.direccion_facturar_texto = direccion.direccion
+                    target.direccion_facturar_fono_1 = direccion.fono_1
+                    if direccion.id_ciudad:
+                        ciudad = session.get(Ciudad, direccion.id_ciudad)
+                        if ciudad:
+                            target.direccion_facturar_ciudad = ciudad.nombre
+                            if ciudad.id_pais:
+                                pais = session.get(Pais, ciudad.id_pais)
+                                if pais:
+                                    target.direccion_facturar_pais = pais.nombre
     except Exception as e:
         print(f"Error populating facturar address snapshot: {e}")
         pass
@@ -315,19 +317,20 @@ def populate_proforma_snapshots(mapper, connection, target):
     try:
         # Populate consignment address snapshots
         if target.id_direccion_consignar:
-            dir_stmt = select(Direccion, Ciudad, Pais).join(
-                Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
-            ).join(
-                Pais, Ciudad.id_pais == Pais.id_pais
-            ).where(Direccion.id_direccion == target.id_direccion_consignar)
-            
-            result = connection.execute(dir_stmt).first()
-            if result:
-                direccion, ciudad, pais = result
-                target.direccion_consignar_texto = direccion.direccion
-                target.direccion_consignar_ciudad = ciudad.nombre
-                target.direccion_consignar_pais = pais.nombre
-                target.direccion_consignar_fono_1 = direccion.fono_1
+            session = target._sa_instance_state.session
+            if session:
+                direccion = session.get(Direccion, target.id_direccion_consignar)
+                if direccion:
+                    target.direccion_consignar_texto = direccion.direccion
+                    target.direccion_consignar_fono_1 = direccion.fono_1
+                    if direccion.id_ciudad:
+                        ciudad = session.get(Ciudad, direccion.id_ciudad)
+                        if ciudad:
+                            target.direccion_consignar_ciudad = ciudad.nombre
+                            if ciudad.id_pais:
+                                pais = session.get(Pais, ciudad.id_pais)
+                                if pais:
+                                    target.direccion_consignar_pais = pais.nombre
     except Exception as e:
         print(f"Error populating consignar address snapshot: {e}")
         pass
@@ -335,19 +338,20 @@ def populate_proforma_snapshots(mapper, connection, target):
     try:
         # Populate notification address snapshots
         if target.id_direccion_notificar:
-            dir_stmt = select(Direccion, Ciudad, Pais).join(
-                Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
-            ).join(
-                Pais, Ciudad.id_pais == Pais.id_pais
-            ).where(Direccion.id_direccion == target.id_direccion_notificar)
-            
-            result = connection.execute(dir_stmt).first()
-            if result:
-                direccion, ciudad, pais = result
-                target.direccion_notificar_texto = direccion.direccion
-                target.direccion_notificar_ciudad = ciudad.nombre
-                target.direccion_notificar_pais = pais.nombre
-                target.direccion_notificar_fono_1 = direccion.fono_1
+            session = target._sa_instance_state.session
+            if session:
+                direccion = session.get(Direccion, target.id_direccion_notificar)
+                if direccion:
+                    target.direccion_notificar_texto = direccion.direccion
+                    target.direccion_notificar_fono_1 = direccion.fono_1
+                    if direccion.id_ciudad:
+                        ciudad = session.get(Ciudad, direccion.id_ciudad)
+                        if ciudad:
+                            target.direccion_notificar_ciudad = ciudad.nombre
+                            if ciudad.id_pais:
+                                pais = session.get(Pais, ciudad.id_pais)
+                                if pais:
+                                    target.direccion_notificar_pais = pais.nombre
     except Exception as e:
         print(f"Error populating notificar address snapshot: {e}")
         pass
