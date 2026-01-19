@@ -208,11 +208,11 @@ def test_proforma_with_detalle():
         detalle_loaded = (db.query(DetalleProforma)
                         .options(
                             joinedload(DetalleProforma.Producto)
-                            .joinedload(Producto.Especie)
+                            .joinedload(Producto.especie)
                         )
                         .options(
                             joinedload(DetalleProforma.Producto)
-                            .joinedload(Producto.Clase)
+                            .joinedload(Producto.clase)
                         )
                         .filter(DetalleProforma.id_detalle_proforma == detalle.id_detalle_proforma)
                         .first())

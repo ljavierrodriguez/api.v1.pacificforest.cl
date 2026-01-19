@@ -120,11 +120,11 @@ def create_detalle_proforma(payload: DetalleProformaCreate, db: Session = Depend
         obj = (db.query(DetalleProforma)
                .options(
                    joinedload(DetalleProforma.Producto)
-                   .joinedload(DetalleProforma.Producto.Especie)
+                   .joinedload(DetalleProforma.Producto.especie)
                )
                .options(
                    joinedload(DetalleProforma.Producto)
-                   .joinedload(DetalleProforma.Producto.Clase)
+                   .joinedload(DetalleProforma.Producto.clase)
                )
                .filter(DetalleProforma.id_detalle_proforma == obj.id_detalle_proforma)
                .first())
@@ -148,11 +148,11 @@ def list_detalle_proforma(
     items = (db.query(DetalleProforma)
              .options(
                  joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.Especie)
+                 .joinedload(DetalleProforma.Producto.especie)
              )
              .options(
                  joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.Clase)
+                 .joinedload(DetalleProforma.Producto.clase)
              )
              .offset(skip)
              .limit(page_size)
@@ -171,11 +171,11 @@ def get_detalles_by_proforma(id_proforma: int, db: Session = Depends(get_db)):
     items = (db.query(DetalleProforma)
              .options(
                  joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.Especie)
+                 .joinedload(DetalleProforma.Producto.especie)
              )
              .options(
                  joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.Clase)
+                 .joinedload(DetalleProforma.Producto.clase)
              )
              .filter(DetalleProforma.id_proforma == id_proforma)
              .all())
@@ -190,11 +190,11 @@ def get_detalle_proforma(item_id: int, db: Session = Depends(get_db)):
     item = (db.query(DetalleProforma)
             .options(
                 joinedload(DetalleProforma.Producto)
-                .joinedload(DetalleProforma.Producto.Especie)
+                .joinedload(DetalleProforma.Producto.especie)
             )
             .options(
                 joinedload(DetalleProforma.Producto)
-                .joinedload(DetalleProforma.Producto.Clase)
+                .joinedload(DetalleProforma.Producto.clase)
             )
             .filter(DetalleProforma.id_detalle_proforma == item_id)
             .first())

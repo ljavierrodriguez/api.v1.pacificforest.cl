@@ -17,7 +17,7 @@ class Especie(Base):
         "Producto",
         primaryjoin="foreign(Producto.id_especie)==Especie.id_especie",
         lazy="dynamic",
-        back_populates="Especie",
+        back_populates="especie",
     )
 
     def __repr__(self):
