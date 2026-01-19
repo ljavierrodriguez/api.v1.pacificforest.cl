@@ -44,11 +44,11 @@ def _build_detalle_response(detalle: DetalleProforma) -> dict:
     # Agregar información de especie y clase si el producto existe
     if detalle.Producto is not None:
         # Información de especie
-        if detalle.Producto.Especie is not None:
+        if detalle.Producto.especie is not None:
             response_data.update({
-                "id_especie": detalle.Producto.Especie.id_especie,
-                "nombre_especie_esp": detalle.Producto.Especie.nombre_esp,
-                "nombre_especie_ing": detalle.Producto.Especie.nombre_ing,
+                "id_especie": detalle.Producto.especie.id_especie,
+                "nombre_especie_esp": detalle.Producto.especie.nombre_esp,
+                "nombre_especie_ing": detalle.Producto.especie.nombre_ing,
             })
         else:
             response_data.update({
@@ -58,10 +58,10 @@ def _build_detalle_response(detalle: DetalleProforma) -> dict:
             })
             
         # Información de clase
-        if detalle.Producto.Clase is not None:
+        if detalle.Producto.clase is not None:
             response_data.update({
-                "id_clase": detalle.Producto.Clase.id_clase,
-                "nombre_clase": detalle.Producto.Clase.nombre,
+                "id_clase": detalle.Producto.clase.id_clase,
+                "nombre_clase": detalle.Producto.clase.nombre,
             })
         else:
             response_data.update({
