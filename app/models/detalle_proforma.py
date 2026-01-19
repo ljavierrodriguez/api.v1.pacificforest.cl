@@ -136,25 +136,25 @@ def populate_detalle_snapshots(mapper, connection, target):
     Automatically populate product snapshot fields when creating a detalle_proforma.
     Captures immutable copies of producto data at creation time.
     """
-    from sqlalchemy import select
     from app.models.producto import Producto
     from app.models.especie import Especie
     
     if target.id_producto:
-        producto_stmt = select(Producto).where(Producto.id_producto == target.id_producto)
-        producto = connection.execute(producto_stmt).scalar_one_or_none()
-        
-        if producto:
-            target.producto_nombre_esp = producto.nombre_producto_esp
-            target.producto_nombre_ing = producto.nombre_producto_ing
-            target.producto_obs_calidad = producto.obs_calidad
+        # Access session from target's state to query ORM objects
+        session = target._sa_instance_state.session
+        if session:
+            producto = session.get(Producto, target.id_producto)
             
-            # Fetch especie if available
-            if producto.id_especie:
-                especie_stmt = select(Especie).where(Especie.id_especie == producto.id_especie)
-                especie = connection.execute(especie_stmt).scalar_one_or_none()
-                if especie:
-                    target.producto_especie = especie.nombre_esp
+            if producto:
+                target.producto_nombre_esp = producto.nombre_producto_esp
+                target.producto_nombre_ing = producto.nombre_producto_ing
+                target.producto_obs_calidad = producto.obs_calidad
+                
+                # Fetch especie if available
+                if producto.id_especie:
+                    especie = session.get(Especie, producto.id_especie)
+                    if especie:
+                        target.producto_especie = especie.nombre_esp
 
 
 # Protect product snapshot immutability - prevent updates to snapshot fields
@@ -181,7 +181,7 @@ def protect_detalle_snapshots(mapper, connection, target):
         original_stmt = select(DetalleProforma).where(
             DetalleProforma.id_detalle_proforma == target.id_detalle_proforma
         )
-        original = connection.execute(original_stmt).scalar_one_or_none()
+        original = connection.execute(original_stmt).scalars().first()
         
         if original:
             # Restore all snapshot fields to their original values
