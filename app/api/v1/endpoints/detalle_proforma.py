@@ -4,6 +4,7 @@ from typing import List
 
 from app.db.session import get_db
 from app.models.detalle_proforma import DetalleProforma
+from app.models.producto import Producto
 from app.schemas.detalle_proforma import (
     DetalleProformaCreate,
     DetalleProformaRead,
@@ -119,12 +120,10 @@ def create_detalle_proforma(payload: DetalleProformaCreate, db: Session = Depend
     if obj.id_producto:
         obj = (db.query(DetalleProforma)
                .options(
-                   joinedload(DetalleProforma.Producto)
-                   .joinedload(DetalleProforma.Producto.especie)
+                   joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
                )
                .options(
-                   joinedload(DetalleProforma.Producto)
-                   .joinedload(DetalleProforma.Producto.clase)
+                   joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
                )
                .filter(DetalleProforma.id_detalle_proforma == obj.id_detalle_proforma)
                .first())
@@ -147,12 +146,10 @@ def list_detalle_proforma(
     # Obtener elementos de la página actual con datos del producto, especie y clase
     items = (db.query(DetalleProforma)
              .options(
-                 joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.especie)
+                 joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
              )
              .options(
-                 joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.clase)
+                 joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
              )
              .offset(skip)
              .limit(page_size)
@@ -170,12 +167,10 @@ def get_detalles_by_proforma(id_proforma: int, db: Session = Depends(get_db)):
     # Cargar todos los detalles de la proforma con los datos del producto, especie y clase
     items = (db.query(DetalleProforma)
              .options(
-                 joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.especie)
+                 joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
              )
              .options(
-                 joinedload(DetalleProforma.Producto)
-                 .joinedload(DetalleProforma.Producto.clase)
+                 joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
              )
              .filter(DetalleProforma.id_proforma == id_proforma)
              .all())
@@ -189,12 +184,10 @@ def get_detalle_proforma(item_id: int, db: Session = Depends(get_db)):
     # Cargar el detalle con los datos del producto, especie y clase
     item = (db.query(DetalleProforma)
             .options(
-                joinedload(DetalleProforma.Producto)
-                .joinedload(DetalleProforma.Producto.especie)
+                joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
             )
             .options(
-                joinedload(DetalleProforma.Producto)
-                .joinedload(DetalleProforma.Producto.clase)
+                joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
             )
             .filter(DetalleProforma.id_detalle_proforma == item_id)
             .first())
@@ -222,12 +215,10 @@ def update_detalle_proforma(item_id: int, payload: DetalleProformaUpdate, db: Se
     if item.id_producto:
         item = (db.query(DetalleProforma)
                 .options(
-                    joinedload(DetalleProforma.Producto)
-                    .joinedload(DetalleProforma.Producto.especie)
+                    joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
                 )
                 .options(
-                    joinedload(DetalleProforma.Producto)
-                    .joinedload(DetalleProforma.Producto.clase)
+                    joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
                 )
                 .filter(DetalleProforma.id_detalle_proforma == item_id)
                 .first())
