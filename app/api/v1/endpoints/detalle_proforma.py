@@ -223,11 +223,11 @@ def update_detalle_proforma(item_id: int, payload: DetalleProformaUpdate, db: Se
         item = (db.query(DetalleProforma)
                 .options(
                     joinedload(DetalleProforma.Producto)
-                    .joinedload(DetalleProforma.Producto.Especie)
+                    .joinedload(DetalleProforma.Producto.especie)
                 )
                 .options(
                     joinedload(DetalleProforma.Producto)
-                    .joinedload(DetalleProforma.Producto.Clase)
+                    .joinedload(DetalleProforma.Producto.clase)
                 )
                 .filter(DetalleProforma.id_detalle_proforma == item_id)
                 .first())
