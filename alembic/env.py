@@ -4,6 +4,7 @@ from sqlalchemy import pool
 from alembic import context
 import os
 import sys
+import io
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -12,7 +13,9 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Read the config file with UTF-8 encoding
+    with io.open(config.config_file_name, encoding='utf-8') as f:
+        fileConfig(f)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

@@ -13,7 +13,7 @@ class ProformaCreate(BaseModel):
     id_agente: Optional[int] = Field(None, description="ID del agente")
     id_tipo_comision: Optional[int] = Field(None, description="ID del tipo de comisión")
     id_clausula_venta: Optional[str] = Field(None, description="ID de la cláusula de venta")
-    id_forma_pago: Optional[int] = Field(None, description="ID de la forma de pago")
+    #id_forma_pago: Optional[int] = Field(None, description="ID de la forma de pago")
     cantidad_contenedor: Optional[int] = Field(None, description="Cantidad de contenedores")
     fecha_emision: date = Field(..., description="Fecha de emisión de la proforma")
     fecha_aceptacion: Optional[date] = Field(None, description="Fecha de aceptación")

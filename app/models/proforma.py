@@ -18,7 +18,7 @@ class Proforma(Base):
     id_agente                = Column(Integer, ForeignKey("agente.id_agente"))
     id_tipo_comision         = Column(Integer, ForeignKey("tipo_comision.id_tipo_comision"))
     id_clausula_venta        = Column(String(10), ForeignKey("clausula_venta.id_clausula_venta"))
-    id_forma_pago            = Column(Integer, ForeignKey("forma_pago.id_forma_pago"))
+    #id_forma_pago            = Column(Integer, ForeignKey("forma_pago.id_forma_pago"))
     cantidad_contenedor      = Column(Integer)
     fecha_emision            = Column(Date, nullable=False)
     fecha_aceptacion         = Column(Date)
@@ -107,7 +107,7 @@ class Proforma(Base):
     ClausulaVenta = relationship("ClausulaVenta", back_populates="Proformas")
     Contenedor = relationship("Contenedor", back_populates="Proformas")
     EstadoProforma = relationship("EstadoProforma", back_populates="Proformas")
-    FormaPago = relationship("FormaPago", foreign_keys=[id_forma_pago])
+    #FormaPago = relationship("FormaPago", foreign_keys=[id_forma_pago])
   
     OperacionExportacion = relationship(
         "OperacionExportacion",
@@ -147,7 +147,7 @@ class Proforma(Base):
             "id_agente": self.id_agente,
             "id_tipo_comision": self.id_tipo_comision,
             "id_clausula_venta": self.id_clausula_venta,
-            "id_forma_pago": self.id_forma_pago,
+            #"id_forma_pago": self.id_forma_pago,
             "cantidad_contenedor": self.cantidad_contenedor,
             "fecha_emision": to_str(self.fecha_emision),
             "fecha_aceptacion": to_str(self.fecha_aceptacion),
@@ -173,15 +173,18 @@ class Proforma(Base):
                 "direccion": self.empresa_direccion,
                 "giro": self.empresa_giro,
             }
-        elif self.Empresa:
+        elif self.Empresa and hasattr(self.Empresa, 'nombre_fantasia'):
             # Fallback to current empresa data for backward compatibility
-            result["empresa"] = {
-                "nombre_fantasia": self.Empresa.nombre_fantasia,
-                "razon_social": self.Empresa.razon_social,
-                "rut": self.Empresa.rut,
-                "direccion": self.Empresa.direccion,
-                "giro": self.Empresa.giro,
-            }
+            try:
+                result["empresa"] = {
+                    "nombre_fantasia": self.Empresa.nombre_fantasia,
+                    "razon_social": self.Empresa.razon_social,
+                    "rut": self.Empresa.rut,
+                    "direccion": self.Empresa.direccion,
+                    "giro": self.Empresa.giro,
+                }
+            except:
+                result["empresa"] = None
         else:
             result["empresa"] = None
         
@@ -193,14 +196,17 @@ class Proforma(Base):
                 "pais": self.direccion_facturar_pais,
                 "fono_1": self.direccion_facturar_fono_1,
             }
-        elif self.DireccionFacturar:
+        elif self.DireccionFacturar and hasattr(self.DireccionFacturar, 'direccion'):
             # Fallback to current direccion data
-            result["direccion_facturar"] = {
-                "texto": self.DireccionFacturar.direccion,
-                "ciudad": self.DireccionFacturar.Ciudad.nombre if self.DireccionFacturar.Ciudad else None,
-                "pais": self.DireccionFacturar.Ciudad.Pais.nombre if self.DireccionFacturar.Ciudad and self.DireccionFacturar.Ciudad.Pais else None,
-                "fono_1": self.DireccionFacturar.fono_1,
-            }
+            try:
+                result["direccion_facturar"] = {
+                    "texto": self.DireccionFacturar.direccion,
+                    "ciudad": self.DireccionFacturar.Ciudad.nombre if self.DireccionFacturar.Ciudad else None,
+                    "pais": self.DireccionFacturar.Ciudad.Pais.nombre if self.DireccionFacturar.Ciudad and self.DireccionFacturar.Ciudad.Pais else None,
+                    "fono_1": self.DireccionFacturar.fono_1,
+                }
+            except:
+                result["direccion_facturar"] = None
         else:
             result["direccion_facturar"] = None
         
@@ -212,14 +218,17 @@ class Proforma(Base):
                 "pais": self.direccion_consignar_pais,
                 "fono_1": self.direccion_consignar_fono_1,
             }
-        elif self.DireccionConsignar:
+        elif self.DireccionConsignar and hasattr(self.DireccionConsignar, 'direccion'):
             # Fallback to current direccion data
-            result["direccion_consignar"] = {
-                "texto": self.DireccionConsignar.direccion,
-                "ciudad": self.DireccionConsignar.Ciudad.nombre if self.DireccionConsignar.Ciudad else None,
-                "pais": self.DireccionConsignar.Ciudad.Pais.nombre if self.DireccionConsignar.Ciudad and self.DireccionConsignar.Ciudad.Pais else None,
-                "fono_1": self.DireccionConsignar.fono_1,
-            }
+            try:
+                result["direccion_consignar"] = {
+                    "texto": self.DireccionConsignar.direccion,
+                    "ciudad": self.DireccionConsignar.Ciudad.nombre if self.DireccionConsignar.Ciudad else None,
+                    "pais": self.DireccionConsignar.Ciudad.Pais.nombre if self.DireccionConsignar.Ciudad and self.DireccionConsignar.Ciudad.Pais else None,
+                    "fono_1": self.DireccionConsignar.fono_1,
+                }
+            except:
+                result["direccion_consignar"] = None
         else:
             result["direccion_consignar"] = None
         
@@ -231,14 +240,17 @@ class Proforma(Base):
                 "pais": self.direccion_notificar_pais,
                 "fono_1": self.direccion_notificar_fono_1,
             }
-        elif self.DireccionNotificar:
+        elif self.DireccionNotificar and hasattr(self.DireccionNotificar, 'direccion'):
             # Fallback to current direccion data
-            result["direccion_notificar"] = {
-                "texto": self.DireccionNotificar.direccion,
-                "ciudad": self.DireccionNotificar.Ciudad.nombre if self.DireccionNotificar.Ciudad else None,
-                "pais": self.DireccionNotificar.Ciudad.Pais.nombre if self.DireccionNotificar.Ciudad and self.DireccionNotificar.Ciudad.Pais else None,
-                "fono_1": self.DireccionNotificar.fono_1,
-            }
+            try:
+                result["direccion_notificar"] = {
+                    "texto": self.DireccionNotificar.direccion,
+                    "ciudad": self.DireccionNotificar.Ciudad.nombre if self.DireccionNotificar.Ciudad else None,
+                    "pais": self.DireccionNotificar.Ciudad.Pais.nombre if self.DireccionNotificar.Ciudad and self.DireccionNotificar.Ciudad.Pais else None,
+                    "fono_1": self.DireccionNotificar.fono_1,
+                }
+            except:
+                result["direccion_notificar"] = None
         else:
             result["direccion_notificar"] = None
         
@@ -265,64 +277,80 @@ def populate_proforma_snapshots(mapper, connection, target):
     from app.models.ciudad import Ciudad
     from app.models.pais import Pais
     
-    # Populate empresa snapshots
-    if target.id_empresa:
-        empresa_stmt = select(Empresa).where(Empresa.id_empresa == target.id_empresa)
-        empresa = connection.execute(empresa_stmt).scalar_one_or_none()
-        if empresa:
-            target.empresa_nombre_fantasia = empresa.nombre_fantasia
-            target.empresa_razon_social = empresa.razon_social
-            target.empresa_rut = empresa.rut
-            target.empresa_direccion = empresa.direccion
-            target.empresa_giro = empresa.giro
+    try:
+        # Populate empresa snapshots
+        if target.id_empresa:
+            empresa_stmt = select(Empresa).where(Empresa.id_empresa == target.id_empresa)
+            empresa = connection.execute(empresa_stmt).scalar_one_or_none()
+            if empresa:
+                target.empresa_nombre_fantasia = empresa.nombre_fantasia
+                target.empresa_razon_social = empresa.razon_social
+                target.empresa_rut = empresa.rut
+                target.empresa_direccion = empresa.direccion
+                target.empresa_giro = empresa.giro
+    except Exception as e:
+        print(f"Error populating empresa snapshot: {e}")
+        pass
     
-    # Populate billing address snapshots
-    if target.id_direccion_facturar:
-        dir_stmt = select(Direccion, Ciudad, Pais).join(
-            Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
-        ).join(
-            Pais, Ciudad.id_pais == Pais.id_pais
-        ).where(Direccion.id_direccion == target.id_direccion_facturar)
-        
-        result = connection.execute(dir_stmt).first()
-        if result:
-            direccion, ciudad, pais = result
-            target.direccion_facturar_texto = direccion.direccion
-            target.direccion_facturar_ciudad = ciudad.nombre
-            target.direccion_facturar_pais = pais.nombre
-            target.direccion_facturar_fono_1 = direccion.fono_1
+    try:
+        # Populate billing address snapshots
+        if target.id_direccion_facturar:
+            dir_stmt = select(Direccion, Ciudad, Pais).join(
+                Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
+            ).join(
+                Pais, Ciudad.id_pais == Pais.id_pais
+            ).where(Direccion.id_direccion == target.id_direccion_facturar)
+            
+            result = connection.execute(dir_stmt).first()
+            if result:
+                direccion, ciudad, pais = result
+                target.direccion_facturar_texto = direccion.direccion
+                target.direccion_facturar_ciudad = ciudad.nombre
+                target.direccion_facturar_pais = pais.nombre
+                target.direccion_facturar_fono_1 = direccion.fono_1
+    except Exception as e:
+        print(f"Error populating facturar address snapshot: {e}")
+        pass
     
-    # Populate consignment address snapshots
-    if target.id_direccion_consignar:
-        dir_stmt = select(Direccion, Ciudad, Pais).join(
-            Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
-        ).join(
-            Pais, Ciudad.id_pais == Pais.id_pais
-        ).where(Direccion.id_direccion == target.id_direccion_consignar)
-        
-        result = connection.execute(dir_stmt).first()
-        if result:
-            direccion, ciudad, pais = result
-            target.direccion_consignar_texto = direccion.direccion
-            target.direccion_consignar_ciudad = ciudad.nombre
-            target.direccion_consignar_pais = pais.nombre
-            target.direccion_consignar_fono_1 = direccion.fono_1
+    try:
+        # Populate consignment address snapshots
+        if target.id_direccion_consignar:
+            dir_stmt = select(Direccion, Ciudad, Pais).join(
+                Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
+            ).join(
+                Pais, Ciudad.id_pais == Pais.id_pais
+            ).where(Direccion.id_direccion == target.id_direccion_consignar)
+            
+            result = connection.execute(dir_stmt).first()
+            if result:
+                direccion, ciudad, pais = result
+                target.direccion_consignar_texto = direccion.direccion
+                target.direccion_consignar_ciudad = ciudad.nombre
+                target.direccion_consignar_pais = pais.nombre
+                target.direccion_consignar_fono_1 = direccion.fono_1
+    except Exception as e:
+        print(f"Error populating consignar address snapshot: {e}")
+        pass
     
-    # Populate notification address snapshots
-    if target.id_direccion_notificar:
-        dir_stmt = select(Direccion, Ciudad, Pais).join(
-            Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
-        ).join(
-            Pais, Ciudad.id_pais == Pais.id_pais
-        ).where(Direccion.id_direccion == target.id_direccion_notificar)
-        
-        result = connection.execute(dir_stmt).first()
-        if result:
-            direccion, ciudad, pais = result
-            target.direccion_notificar_texto = direccion.direccion
-            target.direccion_notificar_ciudad = ciudad.nombre
-            target.direccion_notificar_pais = pais.nombre
-            target.direccion_notificar_fono_1 = direccion.fono_1
+    try:
+        # Populate notification address snapshots
+        if target.id_direccion_notificar:
+            dir_stmt = select(Direccion, Ciudad, Pais).join(
+                Ciudad, Direccion.id_ciudad == Ciudad.id_ciudad
+            ).join(
+                Pais, Ciudad.id_pais == Pais.id_pais
+            ).where(Direccion.id_direccion == target.id_direccion_notificar)
+            
+            result = connection.execute(dir_stmt).first()
+            if result:
+                direccion, ciudad, pais = result
+                target.direccion_notificar_texto = direccion.direccion
+                target.direccion_notificar_ciudad = ciudad.nombre
+                target.direccion_notificar_pais = pais.nombre
+                target.direccion_notificar_fono_1 = direccion.fono_1
+    except Exception as e:
+        print(f"Error populating notificar address snapshot: {e}")
+        pass
 
 
 # Protect snapshot immutability - prevent updates to snapshot fields
