@@ -21,7 +21,7 @@ class Producto(Base):
 
     # ===== Relaciones (mismos nombres que en Yii) =====
     # BELONGS_TO
-    #Clase   = relationship("Clase", back_populates="Productos")
+    Clase   = relationship("Clase", back_populates="Productos")
     Especie = relationship("Especie", back_populates="Productos")
 
     # HAS_MANY
