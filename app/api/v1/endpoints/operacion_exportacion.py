@@ -80,6 +80,14 @@ def delete_operacion(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OperacionExportacion, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="OperacionExportacion not found")
+    
+    # Validar que no exista una proforma asociada
+    if item.Proforma:
+        raise HTTPException(
+            status_code=409,
+            detail="No se puede eliminar una operación de exportación que tiene una proforma asociada"
+        )
+    
     db.delete(item)
     db.commit()
     return {"ok": True}
