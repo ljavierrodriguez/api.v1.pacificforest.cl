@@ -87,6 +87,7 @@ def login_for_access_token(
         )
     # Cargar las seguridades del usuario
     user = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == user.id_usuario).first()
+
     
     access_token = create_access_token({"sub": user.login})
     # Optionally set token in cookie for browser clients
@@ -101,7 +102,7 @@ def login_for_access_token(
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": user
+        "user": user.to_dict()
     }
 
 
@@ -125,7 +126,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    return user.to_dict()
 
 
 # Protected endpoint to get current user info
@@ -138,4 +139,4 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
 def read_users_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Cargar las seguridades del usuario
     user = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == current_user.id_usuario).first()
-    return user
+    return user.to_dict()

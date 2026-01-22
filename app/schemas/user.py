@@ -1,4 +1,5 @@
-from typing import Optional, List
+
+from typing import Optional, List, Dict
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from app.schemas.seguridad import SeguridadRead
 
@@ -6,12 +7,14 @@ from app.schemas.seguridad import SeguridadRead
 class Token(BaseModel):
     access_token: str = Field(..., description="Descripción de access_token")
     token_type: str = Field(..., description="Descripción de token_type")
+    
 
 
 class TokenWithUser(BaseModel):
     access_token: str = Field(..., description="Token de acceso")
     token_type: str = Field(..., description="Tipo de token")
-    user: UserRead = Field(..., description="Información del usuario")
+    user: "UserRead" = Field(..., description="Información del usuario")
+ 
 
 
 class TokenData(BaseModel):
@@ -45,6 +48,12 @@ class UserRead(UserBase):
     id_usuario: int
     seguridades: List[SeguridadRead] = Field(default_factory=list, description="Lista de permisos de seguridad del usuario")
 
+    
+    permissions: Dict[str, Dict[str, bool]] = Field(
+        default_factory=dict,
+        description="Permisos normalizados por módulo: {MODULO: {create, read, update, delete}}"
+    )
+    
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -70,3 +79,10 @@ class UserUpdate(BaseModel):
             ]
         }
     )
+
+
+
+UserBase.model_rebuild()
+UserRead.model_rebuild()
+UserUpdate.model_rebuild()
+TokenWithUser.model_rebuild()

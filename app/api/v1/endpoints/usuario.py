@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
 from app.models.usuario import User
@@ -30,7 +30,8 @@ def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    
+    return user.to_dict()
 
 
 @router.get("/", response_model=PaginatedUserResponse, summary='Listar usuarios', description='Lista paginada de usuarios')
@@ -45,24 +46,26 @@ def list_usuarios(
     # Obtener total de elementos
     total_items = db.query(User).count()
     
-    # Obtener elementos de la página actual
-    items = db.query(User).offset(skip).limit(page_size).all()
+    # Obtener elementos de la página actual con las relaciones cargadas
+    items = db.query(User).options(joinedload(User.seguridades)).offset(skip).limit(page_size).all()
     
     # Crear respuesta paginada
-    return create_paginated_response(items, page, page_size, total_items)
+    return create_paginated_response([u.to_dict() for u in items], page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=UserRead, summary='Obtener usuario', description='Obtener usuario por `id_usuario`')
+
+@router.get("/{item_id}", response_model=UserRead, summary="Obtener usuario", description="Obtener usuario por `id_usuario`")
 def get_usuario(item_id: int, db: Session = Depends(get_db)):
-    item = db.get(User, item_id)
+    item = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return item
+    return item.to_dict()
+
 
 
 @router.put("/{item_id}", response_model=UserRead, summary='Actualizar usuario', description='Actualiza los campos del usuario (parcial). Si se incluye `password`, será re-hasheada.')
 def update_usuario(item_id: int, payload: UserUpdate, db: Session = Depends(get_db)):
-    item = db.get(User, item_id)
+    item = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -90,7 +93,7 @@ def update_usuario(item_id: int, payload: UserUpdate, db: Session = Depends(get_
     db.add(item)
     db.commit()
     db.refresh(item)
-    return item
+    return item.to_dict()
 
 
 @router.delete("/{item_id}", summary='Eliminar usuario', description='Elimina un usuario por `id_usuario`.')
