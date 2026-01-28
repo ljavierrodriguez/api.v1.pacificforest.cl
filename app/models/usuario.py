@@ -28,6 +28,11 @@ class User(Base):
     def hashed_password(self) -> str:
         return self.pass_
 
+    @property
+    def nombre_capitalizado(self) -> str:
+        """Retorna el nombre con la primera letra de cada palabra en mayúscula"""
+        return self.nombre.title() if self.nombre else ""
+
     def set_password(self, raw_password: str):
         if raw_password is None:
             raise ValueError("La contraseña no puede ser None")

@@ -14,7 +14,7 @@ class Clase(Base):
     # Relaciones (actívalas cuando tengas el modelo Producto):
     Productos = relationship(
         "Producto",
-        backref="Clase",
+        back_populates="clase",
         lazy=True,
         primaryjoin="Producto.id_clase==Clase.id_clase",
     )

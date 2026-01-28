@@ -1,6 +1,6 @@
 
 from typing import Optional, List, Dict
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from app.schemas.seguridad import SeguridadRead
 
 
@@ -29,6 +29,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    url_firma: Optional[str] = Field(None, description="URL de la imagen de firma del usuario")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -37,7 +38,8 @@ class UserCreate(UserBase):
                     "login": "johndoe_new",
                     "nombre": "John Doe",
                     "correo": "johndoe_new@example.com",
-                    "password": "newstrongpassword"
+                    "password": "newstrongpassword",
+                    "url_firma": "https://example.com/firmas/johndoe.png"
                 }
             ]
         }
@@ -46,8 +48,16 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id_usuario: int
+    url_firma: Optional[str] = Field(None, description="URL de la imagen de firma del usuario")
     seguridades: List[SeguridadRead] = Field(default_factory=list, description="Lista de permisos de seguridad del usuario")
 
+    @field_validator('nombre', mode='before')
+    @classmethod
+    def capitalize_nombre(cls, v):
+        """Capitaliza la primera letra de cada palabra en el nombre"""
+        if isinstance(v, str):
+            return v.title()
+        return v
     
     permissions: Dict[str, Dict[str, bool]] = Field(
         default_factory=dict,
@@ -63,6 +73,7 @@ class UserUpdate(BaseModel):
     correo: Optional[EmailStr] = None
     password: Optional[str] = None
     telefono: Optional[str] = None
+    url_firma: Optional[str] = Field(None, description="URL de la imagen de firma del usuario")
     activo: Optional[bool] = None
 
     model_config = ConfigDict(
@@ -74,6 +85,7 @@ class UserUpdate(BaseModel):
                     "correo": "johndoe_updated@example.com",
                     "password": "newpassword123",
                     "telefono": "+56912345678",
+                    "url_firma": "https://example.com/firmas/johndoe_updated.png",
                     "activo": True,
                 }
             ]

@@ -4,7 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from datetime import timedelta
+import os
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine_db
@@ -43,6 +45,11 @@ app.add_middleware(
 
 # Incluir las rutas de la versión 1 de la API
 app.include_router(router, prefix="/api/v1")
+
+# Montar directorio de archivos estáticos
+static_path = os.path.join(os.getcwd(), "app", "static")
+os.makedirs(static_path, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 templates = Jinja2Templates(directory="templates")
 

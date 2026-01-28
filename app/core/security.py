@@ -59,7 +59,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def authenticate_user(db: Session, username: str, password: str):
-    user = db.query(User).filter(User.login == username).first()
+    # Normalizar el username a minúsculas para hacer el login case-insensitive
+    username_lower = username.lower() if username else ""
+    user = db.query(User).filter(User.login == username_lower).first()
     if not user:
         return False
     ok, new_hash = verify_password(password, user.hashed_password)
