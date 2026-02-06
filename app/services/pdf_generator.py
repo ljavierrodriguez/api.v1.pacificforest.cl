@@ -365,12 +365,18 @@ class ProformaPDFGenerator:
 
 
     # ---------------- Data Extraction ----------------
-    def _get_cliente_y_contactos(self, proforma: Proforma, db: Session):
-        cliente_name = (
-            proforma.empresa_razon_social
-            or proforma.empresa_nombre_fantasia
+    def _get_cliente_nombre(self, cliente_proveedor):
+        """Obtiene el nombre de un ClienteProveedor (razon_social o nombre_fantasia)"""
+        if not cliente_proveedor:
+            return "-"
+        return (
+            cliente_proveedor.razon_social
+            or cliente_proveedor.nombre_fantasia
             or "-"
         )
+
+    def _get_contactos(self, proforma: Proforma, db: Session):
+        """Obtiene los contactos asociados a la proforma"""
         contacto_phone = None
         contactos = []
 
@@ -384,13 +390,6 @@ class ProformaPDFGenerator:
             c = cp.Contacto
             if not c:
                 continue
-
-            if c.ClienteProveedor is not None:
-                cliente_name = (
-                    c.ClienteProveedor.razon_social
-                    or c.ClienteProveedor.nombre_fantasia
-                    or cliente_name
-                )
 
             parts = []
             if c.nombre:
@@ -406,7 +405,7 @@ class ProformaPDFGenerator:
                 contactos.append(" - ".join(parts))
 
         contactos_html = "<br/>".join(contactos) if contactos else None
-        return cliente_name, contactos_html, contacto_phone
+        return contactos_html, contacto_phone
 
     # ---------------- Header blocks (flowables) ----------------
     def _header_flowable(self):
@@ -571,7 +570,10 @@ class ProformaPDFGenerator:
             line_total = qty * unit_price
             subtotal += line_total
 
-            if self.language == "es":
+            # Usar texto_libre si existe, sino usar el nombre del producto
+            if d.texto_libre:
+                producto = d.texto_libre
+            elif self.language == "es":
                 producto = d.producto_nombre_esp or d.producto_nombre_ing or "-"
             else:
                 producto = d.producto_nombre_ing or d.producto_nombre_esp or "-"
@@ -793,6 +795,29 @@ class ProformaPDFGenerator:
         )
         return t
 
+    def _image_page(self, url_imagen: str):
+        """
+        Crea una página con una imagen centrada.
+        """
+        if not url_imagen:
+            return None
+        
+        # Convertir URL relativa a ruta absoluta
+        if url_imagen.startswith("/static/"):
+            img_path = os.path.join(os.getcwd(), "app", url_imagen.replace("/static/", "static/"))
+        else:
+            img_path = url_imagen
+        
+        if not os.path.exists(img_path):
+            return None
+        
+        try:
+            # Crear imagen con ancho máximo de página, manteniendo proporción
+            img = RLImage(img_path, width=7*inch, height=9*inch, kind='proportional')
+            return img
+        except Exception as e:
+            return None
+
     # ---------------- Public API ----------------
     def generate_pdf(self, proforma: Proforma, db: Session) -> BytesIO:
         buffer = BytesIO()
@@ -808,7 +833,19 @@ class ProformaPDFGenerator:
 
         elements = []
 
-        cliente_name, contactos_html, contacto_phone = self._get_cliente_y_contactos(proforma, db)
+        # Obtener contactos para mostrar en la sección de facturar
+        contactos_html, contacto_phone = self._get_contactos(proforma, db)
+
+        # Obtener nombres de clientes desde OperacionExportacion
+        facturar_name = "-"
+        consignar_name = "-"
+        notificar_name = "-"
+        
+        if proforma.OperacionExportacion:
+            oe = proforma.OperacionExportacion
+            facturar_name = self._get_cliente_nombre(oe.FacturarA)
+            consignar_name = self._get_cliente_nombre(oe.ConsignarA)
+            notificar_name = self._get_cliente_nombre(oe.NotificarA)
 
         facturar_country_city = f"{proforma.direccion_facturar_pais or '-'} / {proforma.direccion_facturar_ciudad or '-'}"
         consignar_country_city = f"{proforma.direccion_consignar_pais or '-'} / {proforma.direccion_consignar_ciudad or '-'}"
@@ -822,7 +859,7 @@ class ProformaPDFGenerator:
         elements.append(
             self._address_block(
                 self.t("BILL_TO"),
-                cliente_name,
+                facturar_name,
                 proforma.direccion_facturar_texto,
                 fono_fact,
                 facturar_country_city,
@@ -833,7 +870,7 @@ class ProformaPDFGenerator:
         elements.append(
             self._address_block(
                 self.t("SHIP_TO"),
-                cliente_name,
+                consignar_name,
                 proforma.direccion_consignar_texto,
                 fono_cons,
                 consignar_country_city,
@@ -844,7 +881,7 @@ class ProformaPDFGenerator:
         elements.append(
             self._address_block(
                 self.t("NOTIFY"),
-                cliente_name,
+                notificar_name,
                 proforma.direccion_notificar_texto,
                 fono_not,
                 notificar_country_city,
@@ -882,6 +919,14 @@ class ProformaPDFGenerator:
         elements.append(PageBreak())
         elements.append(Spacer(1, 0.7 * inch))
         elements.append(self._signatures(proforma))
+
+        # ===== PAGE 4 (si hay imagen) =====
+        if getattr(proforma, "url_imagen", None):
+            img = self._image_page(proforma.url_imagen)
+            if img:
+                elements.append(PageBreak())
+                elements.append(Spacer(1, 0.5 * inch))
+                elements.append(img)
 
         def on_page(canv, d):
             self._draw_page_header(canv, d, proforma)
