@@ -93,6 +93,11 @@ class UserUpdate(BaseModel):
     )
 
 
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(..., description="Token de restablecimiento")
+    new_password: str = Field(..., description="Nueva contraseña")
+
+
 
 UserBase.model_rebuild()
 UserRead.model_rebuild()

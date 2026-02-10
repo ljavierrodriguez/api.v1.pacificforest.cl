@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import Numeric, cast, func
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.detalle_orden_compra import DetalleOrdenCompra
+from app.models.detalle_proforma import DetalleProforma
+from app.models.orden_compra import OrdenCompra
+from app.models.producto import Producto
+from app.models.proforma import Proforma
 from app.schemas.detalle_orden_compra import (
 DetalleOrdenCompraCreate,
     DetalleOrdenCompraRead,
@@ -14,12 +19,106 @@ from app.schemas.pagination import create_paginated_response
 router = APIRouter(prefix="/detalle_orden_compra", tags=["detalle_orden_compra"])
 
 
+def _update_proforma_estado(db: Session, proforma_id: int) -> None:
+    proforma = db.get(Proforma, proforma_id)
+    if not proforma:
+        return
+
+    volumen_proforma = db.query(
+        func.coalesce(
+            func.sum(cast(DetalleProforma.volumen_eq, Numeric(12, 3))),
+            0,
+        )
+    ).filter(DetalleProforma.id_proforma == proforma_id).scalar()
+
+    volumen_odc = db.query(
+        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+    ).join(
+        OrdenCompra,
+        DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
+    ).filter(OrdenCompra.id_proforma == proforma_id).scalar()
+
+    tiene_odc = db.query(OrdenCompra.id_orden_compra).filter(
+        OrdenCompra.id_proforma == proforma_id
+    ).first() is not None
+
+    if not tiene_odc:
+        proforma.id_estado_proforma = 1
+    elif (volumen_odc or 0) >= (volumen_proforma or 0) - 10:
+        proforma.id_estado_proforma = 3
+    else:
+        proforma.id_estado_proforma = 2
+
+    db.add(proforma)
+
+
 @router.post("/", response_model=DetalleOrdenCompraRead, summary='POST Detalle Orden Compra', description='POST Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
 def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_db)):
+    orden = db.get(OrdenCompra, payload.id_orden_compra)
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
+
+    if orden.id_proforma and payload.id_producto and payload.volumen_eq is not None:
+        volumen_proforma = db.query(
+            func.coalesce(
+                func.sum(cast(DetalleProforma.volumen_eq, Numeric(12, 3))),
+                0,
+            )
+        ).filter(
+            DetalleProforma.id_proforma == orden.id_proforma,
+            DetalleProforma.id_producto == payload.id_producto,
+        ).scalar()
+
+        volumen_otros_odc = db.query(
+            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+        ).join(
+            OrdenCompra,
+            DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
+        ).filter(
+            OrdenCompra.id_proforma == orden.id_proforma,
+            DetalleOrdenCompra.id_producto == payload.id_producto,
+            OrdenCompra.id_orden_compra != orden.id_orden_compra,
+        ).scalar()
+
+        volumen_actual_odc = db.query(
+            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+        ).filter(
+            DetalleOrdenCompra.id_orden_compra == orden.id_orden_compra,
+            DetalleOrdenCompra.id_producto == payload.id_producto,
+        ).scalar()
+
+        nuevo_total_odc = (volumen_actual_odc or 0) + (payload.volumen_eq or 0)
+        limite = (volumen_proforma or 0) - (volumen_otros_odc or 0)
+
+        if (volumen_proforma or 0) == 0 and (payload.volumen_eq or 0) > 0:
+            producto = db.get(Producto, payload.id_producto)
+            nombre = producto.nombre_producto_esp if producto else str(payload.id_producto)
+            raise HTTPException(
+                status_code=403,
+                detail=f"Producto {nombre} no existe en la proforma",
+            )
+
+        if nuevo_total_odc > limite:
+            producto = db.get(Producto, payload.id_producto)
+            nombre = producto.nombre_producto_esp if producto else str(payload.id_producto)
+            if (volumen_otros_odc or 0) >= (volumen_proforma or 0):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Volumen de Producto {nombre} ya fue completado",
+                )
+            maximo_volumen = limite
+            raise HTTPException(
+                status_code=403,
+                detail=f"Volumen de Producto {nombre} supera {maximo_volumen}",
+            )
+
     obj = DetalleOrdenCompra(**payload.model_dump())
     db.add(obj)
     db.commit()
     db.refresh(obj)
+    if orden.id_proforma:
+        _update_proforma_estado(db, orden.id_proforma)
+        db.commit()
     return obj
 
 
@@ -55,11 +154,74 @@ def update_detalle(item_id: int, payload: DetalleOrdenCompraUpdate, db: Session 
     item = db.get(DetalleOrdenCompra, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Not found")
+
+    orden = db.get(OrdenCompra, item.id_orden_compra)
+    new_producto_id = payload.id_producto if payload.id_producto is not None else item.id_producto
+    new_volumen_eq = payload.volumen_eq if payload.volumen_eq is not None else item.volumen_eq
+
+    if orden and orden.id_proforma and new_producto_id and new_volumen_eq is not None:
+        volumen_proforma = db.query(
+            func.coalesce(
+                func.sum(cast(DetalleProforma.volumen_eq, Numeric(12, 3))),
+                0,
+            )
+        ).filter(
+            DetalleProforma.id_proforma == orden.id_proforma,
+            DetalleProforma.id_producto == new_producto_id,
+        ).scalar()
+
+        volumen_otros_odc = db.query(
+            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+        ).join(
+            OrdenCompra,
+            DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
+        ).filter(
+            OrdenCompra.id_proforma == orden.id_proforma,
+            DetalleOrdenCompra.id_producto == new_producto_id,
+            OrdenCompra.id_orden_compra != orden.id_orden_compra,
+        ).scalar()
+
+        volumen_actual_odc = db.query(
+            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+        ).filter(
+            DetalleOrdenCompra.id_orden_compra == orden.id_orden_compra,
+            DetalleOrdenCompra.id_producto == new_producto_id,
+            DetalleOrdenCompra.id_detalle_odc != item_id,
+        ).scalar()
+
+        nuevo_total_odc = (volumen_actual_odc or 0) + (new_volumen_eq or 0)
+        limite = (volumen_proforma or 0) - (volumen_otros_odc or 0)
+
+        if (volumen_proforma or 0) == 0 and (new_volumen_eq or 0) > 0:
+            producto = db.get(Producto, new_producto_id)
+            nombre = producto.nombre_producto_esp if producto else str(new_producto_id)
+            raise HTTPException(
+                status_code=403,
+                detail=f"Producto {nombre} no existe en la proforma",
+            )
+
+        if nuevo_total_odc > limite:
+            producto = db.get(Producto, new_producto_id)
+            nombre = producto.nombre_producto_esp if producto else str(new_producto_id)
+            if (volumen_otros_odc or 0) >= (volumen_proforma or 0):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Volumen de Producto {nombre} ya fue completado",
+                )
+            maximo_volumen = limite
+            raise HTTPException(
+                status_code=403,
+                detail=f"Volumen de Producto {nombre} supera {maximo_volumen}",
+            )
+
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(item, k, v)
     db.add(item)
     db.commit()
     db.refresh(item)
+    if orden and orden.id_proforma:
+        _update_proforma_estado(db, orden.id_proforma)
+        db.commit()
     return item
 
 
@@ -68,6 +230,11 @@ def delete_detalle(item_id: int, db: Session = Depends(get_db)):
     item = db.get(DetalleOrdenCompra, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Not found")
+    orden = db.get(OrdenCompra, item.id_orden_compra)
+    proforma_id = orden.id_proforma if orden else None
     db.delete(item)
     db.commit()
+    if proforma_id:
+        _update_proforma_estado(db, proforma_id)
+        db.commit()
     return {"ok": True}

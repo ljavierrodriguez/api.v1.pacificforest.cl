@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
 from typing import List
 from sqlalchemy.orm import Session, joinedload
 import os
@@ -7,8 +7,11 @@ from datetime import datetime
 
 from app.db.session import get_db
 from app.models.usuario import User
-from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.schemas.user import UserCreate, UserRead, UserUpdate, PasswordResetConfirm
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+from app.core.security import create_password_reset_token, verify_password_reset_token
+from app.core.config import settings
+from app.services.email import send_email
 
 # Crear el modelo de respuesta paginada para Usuario
 PaginatedUserResponse = create_paginated_response_model(UserRead)
@@ -70,13 +73,20 @@ def get_usuario(item_id: int, db: Session = Depends(get_db)):
 
 
 
-@router.put("/{item_id}", response_model=UserRead, summary='Actualizar usuario', description='Actualiza los campos del usuario (parcial). Si se incluye `password`, será re-hasheada.')
-def update_usuario(item_id: int, payload: UserUpdate, db: Session = Depends(get_db)):
+@router.put("/{item_id}", response_model=UserRead, summary='Actualizar usuario', description='Actualiza los campos del usuario (parcial).')
+def update_usuario(
+    item_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+):
     item = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     data = payload.model_dump(exclude_unset=True)
+    old_correo = item.correo
+    correo_changed = False
 
     # Manejar cambios sensibles
     if "login" in data and data["login"] != item.login:
@@ -90,9 +100,10 @@ def update_usuario(item_id: int, payload: UserUpdate, db: Session = Depends(get_
         if db.query(User).filter(User.correo == str(data["correo"]) ).first():
             raise HTTPException(status_code=400, detail="El correo ya está registrado")
         item.correo = str(data["correo"])
+        correo_changed = True
 
-    if "password" in data and data["password"]:
-        item.set_password(data["password"])
+    if "password" in data:
+        raise HTTPException(status_code=400, detail="Para cambiar la contraseña use el endpoint de restablecimiento")
 
     # Campos directos
     for field in ("nombre", "telefono", "activo", "url_firma"):
@@ -102,7 +113,76 @@ def update_usuario(item_id: int, payload: UserUpdate, db: Session = Depends(get_
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    if correo_changed:
+        subject = "Cambio de correo"
+        body_old = (
+            f"Hola {item.nombre},\n\n"
+            f"Tu correo de acceso fue cambiado de {old_correo} a {item.correo}.\n"
+            "Si no reconoces este cambio, contacta al administrador.\n"
+        )
+        body_new = (
+            f"Hola {item.nombre},\n\n"
+            f"Este correo fue registrado como nuevo correo de acceso para tu usuario.\n"
+            f"Correo anterior: {old_correo}\n"
+        )
+
+        if background_tasks:
+            background_tasks.add_task(send_email, old_correo, subject, body_old)
+            background_tasks.add_task(send_email, item.correo, subject, body_new)
+        else:
+            send_email(old_correo, subject, body_old)
+            send_email(item.correo, subject, body_new)
+
     return item.to_dict()
+
+
+@router.post("/{item_id}/reset-password", summary="Restablecer contraseña", description="Envía un link de restablecimiento al correo del usuario.")
+def reset_usuario_password(
+    item_id: int,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+):
+    item = db.query(User).filter(User.id_usuario == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    token = create_password_reset_token(item.id_usuario)
+    separator = "&" if "?" in settings.PASSWORD_RESET_URL else "?"
+    reset_url = f"{settings.PASSWORD_RESET_URL}{separator}token={token}"
+
+    subject = "Restablecer contraseña"
+    body = (
+        f"Hola {item.nombre},\n\n"
+        "Se solicito un restablecimiento de contraseña.\n"
+        f"Puedes crear una nueva contraseña en el siguiente link:\n{reset_url}\n\n"
+        "Si no solicitaste este cambio, ignora este correo.\n"
+    )
+
+    if background_tasks:
+        background_tasks.add_task(send_email, item.correo, subject, body)
+    else:
+        send_email(item.correo, subject, body)
+
+    return {"ok": True}
+
+
+@router.post("/reset-password/confirm", summary="Confirmar restablecimiento", description="Confirma un restablecimiento de contraseña con token.")
+def confirm_reset_password(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    user_id = verify_password_reset_token(payload.token)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Token invalido o expirado")
+
+    item = db.query(User).filter(User.id_usuario == user_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    item.set_password(payload.new_password)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+
+    return {"ok": True}
 
 
 @router.post("/{item_id}/firma", summary='Subir firma del usuario', description='Sube una imagen de firma para el usuario.')

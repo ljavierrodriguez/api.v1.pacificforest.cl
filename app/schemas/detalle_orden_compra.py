@@ -37,8 +37,13 @@ class DetalleOrdenCompraRead(BaseModel):
 
 
 class DetalleOrdenCompraUpdate(BaseModel):
+    id_producto: Optional[int] = None
+    id_unidad_venta: Optional[int] = None
     texto_abierto: Optional[str] = None
     cantidad: Optional[float] = None
     precio_unitario: Optional[float] = None
+    volumen: Optional[float] = None
+    volumen_eq: Optional[float] = None
+    precio_eq: Optional[float] = None
 
     model_config = ConfigDict()

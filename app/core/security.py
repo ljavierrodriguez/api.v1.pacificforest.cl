@@ -58,6 +58,25 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+def create_password_reset_token(user_id: int) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"sub": str(user_id), "type": "password_reset", "exp": expire}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_password_reset_token(token: str) -> Optional[int]:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "password_reset":
+            return None
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        return int(user_id)
+    except Exception:
+        return None
+
+
 def authenticate_user(db: Session, username: str, password: str):
     # Normalizar el username a minúsculas para hacer el login case-insensitive
     username_lower = username.lower() if username else ""
