@@ -10,12 +10,12 @@ class User(Base):
     __tablename__ = "usuario"
 
     id_usuario = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    rut = Column(String(20), unique=True, nullable=True)
+    rut = Column(String(20), unique=True, nullable=False)
     nombre = Column(String(120), nullable=False)
     login = Column(String(80), unique=True, index=True, nullable=False)
     pass_ = Column("pass", String(255), nullable=False)
     correo = Column(String(200), unique=True, index=True, nullable=False)
-    telefono = Column(String(50), nullable=True)
+    telefono = Column(String(50), nullable=False)
     url_firma = Column(String(255), nullable=True)
     activo = Column(Boolean, default=True, nullable=False)
 

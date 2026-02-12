@@ -34,30 +34,6 @@ class Proforma(Base):
     id_direccion_consignar   = Column(Integer, ForeignKey("direccion.id_direccion"), nullable=False)
     id_direccion_notificar   = Column(Integer, ForeignKey("direccion.id_direccion"), nullable=False)
 
-    # Empresa snapshot fields (immutable historical data)
-    empresa_nombre_fantasia  = Column(String(200))
-    empresa_razon_social     = Column(String(200))
-    empresa_rut              = Column(String(15))
-    empresa_direccion        = Column(String(200))
-    empresa_giro             = Column(String(200))
-
-    # Billing address snapshot fields (immutable historical data)
-    direccion_facturar_texto = Column(String(200))
-    direccion_facturar_ciudad = Column(String(100))
-    direccion_facturar_pais  = Column(String(100))
-    direccion_facturar_fono_1 = Column(String(15))
-
-    # Consignment address snapshot fields (immutable historical data)
-    direccion_consignar_texto = Column(String(200))
-    direccion_consignar_ciudad = Column(String(100))
-    direccion_consignar_pais = Column(String(100))
-    direccion_consignar_fono_1 = Column(String(15))
-
-    # Notification address snapshot fields (immutable historical data)
-    direccion_notificar_texto = Column(String(200))
-    direccion_notificar_ciudad = Column(String(100))
-    direccion_notificar_pais = Column(String(100))
-    direccion_notificar_fono_1 = Column(String(15))
 
     #Relaciones
     ContactosProforma = relationship(
@@ -147,7 +123,6 @@ class Proforma(Base):
             "id_agente": self.id_agente,
             "id_tipo_comision": self.id_tipo_comision,
             "id_clausula_venta": self.id_clausula_venta,
-            "id_forma_pago": self.id_forma_pago,
             "cantidad_contenedor": self.cantidad_contenedor,
             "fecha_emision": to_str(self.fecha_emision),
             "fecha_aceptacion": to_str(self.fecha_aceptacion),
@@ -164,17 +139,7 @@ class Proforma(Base):
             "id_direccion_notificar": self.id_direccion_notificar,
         }
         
-        # Add empresa snapshots (with fallback to current Empresa data)
-        if self.empresa_nombre_fantasia:
-            result["empresa"] = {
-                "nombre_fantasia": self.empresa_nombre_fantasia,
-                "razon_social": self.empresa_razon_social,
-                "rut": self.empresa_rut,
-                "direccion": self.empresa_direccion,
-                "giro": self.empresa_giro,
-            }
-        elif self.Empresa and hasattr(self.Empresa, 'nombre_fantasia'):
-            # Fallback to current empresa data for backward compatibility
+        if self.Empresa and hasattr(self.Empresa, "nombre_fantasia"):
             try:
                 result["empresa"] = {
                     "nombre_fantasia": self.Empresa.nombre_fantasia,
@@ -183,21 +148,12 @@ class Proforma(Base):
                     "direccion": self.Empresa.direccion,
                     "giro": self.Empresa.giro,
                 }
-            except:
+            except Exception:
                 result["empresa"] = None
         else:
             result["empresa"] = None
-        
-        # Add billing address snapshots (with fallback)
-        if self.direccion_facturar_texto:
-            result["direccion_facturar"] = {
-                "texto": self.direccion_facturar_texto,
-                "ciudad": self.direccion_facturar_ciudad,
-                "pais": self.direccion_facturar_pais,
-                "fono_1": self.direccion_facturar_fono_1,
-            }
-        elif self.DireccionFacturar and hasattr(self.DireccionFacturar, 'direccion'):
-            # Fallback to current direccion data
+
+        if self.DireccionFacturar and hasattr(self.DireccionFacturar, "direccion"):
             try:
                 result["direccion_facturar"] = {
                     "texto": self.DireccionFacturar.direccion,
@@ -205,21 +161,12 @@ class Proforma(Base):
                     "pais": self.DireccionFacturar.Ciudad.Pais.nombre if self.DireccionFacturar.Ciudad and self.DireccionFacturar.Ciudad.Pais else None,
                     "fono_1": self.DireccionFacturar.fono_1,
                 }
-            except:
+            except Exception:
                 result["direccion_facturar"] = None
         else:
             result["direccion_facturar"] = None
-        
-        # Add consignment address snapshots (with fallback)
-        if self.direccion_consignar_texto:
-            result["direccion_consignar"] = {
-                "texto": self.direccion_consignar_texto,
-                "ciudad": self.direccion_consignar_ciudad,
-                "pais": self.direccion_consignar_pais,
-                "fono_1": self.direccion_consignar_fono_1,
-            }
-        elif self.DireccionConsignar and hasattr(self.DireccionConsignar, 'direccion'):
-            # Fallback to current direccion data
+
+        if self.DireccionConsignar and hasattr(self.DireccionConsignar, "direccion"):
             try:
                 result["direccion_consignar"] = {
                     "texto": self.DireccionConsignar.direccion,
@@ -227,21 +174,12 @@ class Proforma(Base):
                     "pais": self.DireccionConsignar.Ciudad.Pais.nombre if self.DireccionConsignar.Ciudad and self.DireccionConsignar.Ciudad.Pais else None,
                     "fono_1": self.DireccionConsignar.fono_1,
                 }
-            except:
+            except Exception:
                 result["direccion_consignar"] = None
         else:
             result["direccion_consignar"] = None
-        
-        # Add notification address snapshots (with fallback)
-        if self.direccion_notificar_texto:
-            result["direccion_notificar"] = {
-                "texto": self.direccion_notificar_texto,
-                "ciudad": self.direccion_notificar_ciudad,
-                "pais": self.direccion_notificar_pais,
-                "fono_1": self.direccion_notificar_fono_1,
-            }
-        elif self.DireccionNotificar and hasattr(self.DireccionNotificar, 'direccion'):
-            # Fallback to current direccion data
+
+        if self.DireccionNotificar and hasattr(self.DireccionNotificar, "direccion"):
             try:
                 result["direccion_notificar"] = {
                     "texto": self.DireccionNotificar.direccion,
@@ -249,7 +187,7 @@ class Proforma(Base):
                     "pais": self.DireccionNotificar.Ciudad.Pais.nombre if self.DireccionNotificar.Ciudad and self.DireccionNotificar.Ciudad.Pais else None,
                     "fono_1": self.DireccionNotificar.fono_1,
                 }
-            except:
+            except Exception:
                 result["direccion_notificar"] = None
         else:
             result["direccion_notificar"] = None
@@ -264,130 +202,3 @@ def proforma_before_insert(mapper, connection, target):
         target.id_proforma = max(max_id + 1, 1798)
 
 
-# Populate snapshot fields automatically when creating a proforma
-@event.listens_for(Proforma, "before_insert")
-def populate_proforma_snapshots(mapper, connection, target):
-    """
-    Automatically populate snapshot fields when creating a proforma.
-    Captures immutable copies of empresa and direccion data at creation time.
-    """
-    # Import models here to avoid circular imports
-    from app.models.empresa import Empresa
-    from app.models.direccion import Direccion
-    from app.models.ciudad import Ciudad
-    from app.models.pais import Pais
-    
-    try:
-        # Populate empresa snapshots
-        if target.id_empresa:
-            session = target._sa_instance_state.session
-            if session:
-                empresa = session.get(Empresa, target.id_empresa)
-                if empresa:
-                    target.empresa_nombre_fantasia = empresa.nombre_fantasia
-                    target.empresa_razon_social = empresa.razon_social
-                    target.empresa_rut = empresa.rut
-                    target.empresa_direccion = empresa.direccion
-                    target.empresa_giro = empresa.giro
-    except Exception as e:
-        print(f"Error populating empresa snapshot: {e}")
-        pass
-    
-    try:
-        # Populate billing address snapshots
-        if target.id_direccion_facturar:
-            session = target._sa_instance_state.session
-            if session:
-                direccion = session.get(Direccion, target.id_direccion_facturar)
-                if direccion:
-                    target.direccion_facturar_texto = direccion.direccion
-                    target.direccion_facturar_fono_1 = direccion.fono_1
-                    if direccion.id_ciudad:
-                        ciudad = session.get(Ciudad, direccion.id_ciudad)
-                        if ciudad:
-                            target.direccion_facturar_ciudad = ciudad.nombre
-                            if ciudad.id_pais:
-                                pais = session.get(Pais, ciudad.id_pais)
-                                if pais:
-                                    target.direccion_facturar_pais = pais.nombre
-    except Exception as e:
-        print(f"Error populating facturar address snapshot: {e}")
-        pass
-    
-    try:
-        # Populate consignment address snapshots
-        if target.id_direccion_consignar:
-            session = target._sa_instance_state.session
-            if session:
-                direccion = session.get(Direccion, target.id_direccion_consignar)
-                if direccion:
-                    target.direccion_consignar_texto = direccion.direccion
-                    target.direccion_consignar_fono_1 = direccion.fono_1
-                    if direccion.id_ciudad:
-                        ciudad = session.get(Ciudad, direccion.id_ciudad)
-                        if ciudad:
-                            target.direccion_consignar_ciudad = ciudad.nombre
-                            if ciudad.id_pais:
-                                pais = session.get(Pais, ciudad.id_pais)
-                                if pais:
-                                    target.direccion_consignar_pais = pais.nombre
-    except Exception as e:
-        print(f"Error populating consignar address snapshot: {e}")
-        pass
-    
-    try:
-        # Populate notification address snapshots
-        if target.id_direccion_notificar:
-            session = target._sa_instance_state.session
-            if session:
-                direccion = session.get(Direccion, target.id_direccion_notificar)
-                if direccion:
-                    target.direccion_notificar_texto = direccion.direccion
-                    target.direccion_notificar_fono_1 = direccion.fono_1
-                    if direccion.id_ciudad:
-                        ciudad = session.get(Ciudad, direccion.id_ciudad)
-                        if ciudad:
-                            target.direccion_notificar_ciudad = ciudad.nombre
-                            if ciudad.id_pais:
-                                pais = session.get(Pais, ciudad.id_pais)
-                                if pais:
-                                    target.direccion_notificar_pais = pais.nombre
-    except Exception as e:
-        print(f"Error populating notificar address snapshot: {e}")
-        pass
-
-
-# Protect snapshot immutability - prevent updates to snapshot fields
-@event.listens_for(Proforma, "before_update")
-def protect_proforma_snapshots(mapper, connection, target):
-    """
-    Ensure snapshot fields remain immutable after creation.
-    Restores original snapshot values even if update attempts to change them.
-    """
-    # Get the current state from the session
-    state = target._sa_instance_state
-    
-    # List of all snapshot field names
-    snapshot_fields = [
-        'empresa_nombre_fantasia', 'empresa_razon_social', 'empresa_rut', 
-        'empresa_direccion', 'empresa_giro',
-        'direccion_facturar_texto', 'direccion_facturar_ciudad', 
-        'direccion_facturar_pais', 'direccion_facturar_fono_1',
-        'direccion_consignar_texto', 'direccion_consignar_ciudad',
-        'direccion_consignar_pais', 'direccion_consignar_fono_1',
-        'direccion_notificar_texto', 'direccion_notificar_ciudad',
-        'direccion_notificar_pais', 'direccion_notificar_fono_1',
-    ]
-    
-    # Check if any snapshot fields have been modified
-    history = state.get_history('empresa_nombre_fantasia', True)
-    if history.has_changes():
-        # If snapshots are being modified, restore original values from database
-        from sqlalchemy import select
-        original_stmt = select(Proforma).where(Proforma.id_proforma == target.id_proforma)
-        original = connection.execute(original_stmt).scalar_one_or_none()
-        
-        if original:
-            # Restore all snapshot fields to their original values
-            for field in snapshot_fields:
-                setattr(target, field, getattr(original, field))

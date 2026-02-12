@@ -22,9 +22,11 @@ class TokenData(BaseModel):
 
 
 class UserBase(BaseModel):
+    rut: str = Field(..., description="RUT del usuario")
     login: str = Field(..., description="Descripción de login")
     nombre: str = Field(..., description="Descripción de nombre")
     correo: EmailStr = Field(..., description="Descripción de correo")
+    telefono: str = Field(..., description="Teléfono del usuario")
 
 
 class UserCreate(UserBase):
@@ -35,9 +37,11 @@ class UserCreate(UserBase):
         json_schema_extra={
             "examples": [
                 {
+                    "rut": "12345678-9",
                     "login": "johndoe_new",
                     "nombre": "John Doe",
                     "correo": "johndoe_new@example.com",
+                    "telefono": "+56912345678",
                     "password": "newstrongpassword",
                     "url_firma": "https://example.com/firmas/johndoe.png"
                 }
@@ -68,6 +72,7 @@ class UserRead(UserBase):
 
 
 class UserUpdate(BaseModel):
+    rut: Optional[str] = None
     login: Optional[str] = None
     nombre: Optional[str] = None
     correo: Optional[EmailStr] = None
@@ -80,6 +85,7 @@ class UserUpdate(BaseModel):
         json_schema_extra={
             "examples": [
                 {
+                    "rut": "12345678-9",
                     "login": "johndoe",
                     "nombre": "John Doe Updated",
                     "correo": "johndoe_updated@example.com",

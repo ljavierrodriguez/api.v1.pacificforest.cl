@@ -1,11 +1,11 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AgenteBase(BaseModel):
     id_pais: int = Field(..., description="Descripción de id_pais")
     nombre: str = Field(..., description="Descripción de nombre")
-    correo: Optional[EmailStr] = None
+    correo: Optional[str] = None
     telefono: Optional[str] = None
     por_defecto: Optional[bool] = False
 
@@ -29,12 +29,13 @@ class AgenteCreate(AgenteBase):
 class AgenteUpdate(BaseModel):
     id_pais: Optional[int] = None
     nombre: Optional[str] = None
-    correo: Optional[EmailStr] = None
+    correo: Optional[str] = None
     telefono: Optional[str] = None
     por_defecto: Optional[bool] = None
 
 
 class AgenteRead(AgenteBase):
     id_agente: int
+    pais_nombre: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

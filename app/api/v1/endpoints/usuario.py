@@ -24,16 +24,20 @@ def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
     # Normalizar login a minúsculas para hacerlo case-insensitive
     login_lower = payload.login.lower() if payload.login else ""
     
-    # Validar unicidad de login y correo
+    # Validar unicidad de rut, login y correo
+    if db.query(User).filter(User.rut == payload.rut).first():
+        raise HTTPException(status_code=400, detail="El RUT ya está registrado")
     if db.query(User).filter(User.login == login_lower).first():
         raise HTTPException(status_code=400, detail="El login ya existe")
     if db.query(User).filter(User.correo == str(payload.correo)).first():
         raise HTTPException(status_code=400, detail="El correo ya está registrado")
 
     user = User(
+        rut=payload.rut,
         login=login_lower,
         nombre=payload.nombre,
         correo=str(payload.correo),
+        telefono=payload.telefono,
         url_firma=payload.url_firma,
     )
     user.set_password(payload.password)
@@ -89,6 +93,11 @@ def update_usuario(
     correo_changed = False
 
     # Manejar cambios sensibles
+    if "rut" in data and data["rut"] != item.rut:
+        if db.query(User).filter(User.rut == data["rut"]).first():
+            raise HTTPException(status_code=400, detail="El RUT ya está registrado")
+        item.rut = data["rut"]
+
     if "login" in data and data["login"] != item.login:
         # Normalizar login a minúsculas
         login_lower = data["login"].lower() if data["login"] else ""

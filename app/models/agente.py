@@ -28,6 +28,10 @@ class Agente(Base):
             "por_defecto": self.por_defecto,
         }
 
+    @property
+    def pais_nombre(self) -> str | None:
+        return self.Pais.nombre if self.Pais else None
+
     def __repr__(self):
         return f"<Agente id={self.id_agente} nombre={self.nombre!r} pais={self.id_pais} default={self.por_defecto}>"
 

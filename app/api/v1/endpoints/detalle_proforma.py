@@ -1,15 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
 from app.models.detalle_proforma import DetalleProforma
-from app.models.producto import Producto
 from app.schemas.detalle_proforma import (
     DetalleProformaCreate,
     DetalleProformaRead,
     DetalleProformaUpdate,
-    ProductoBasico,
 )
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 
@@ -41,53 +39,6 @@ def _build_detalle_response(detalle: DetalleProforma) -> dict:
         "volumen_eq": detalle.volumen_eq,
         "precio_eq": detalle.precio_eq,
     }
-    
-    # Agregar información de especie y clase si el producto existe
-    if detalle.Producto is not None:
-        # Información de especie
-        if detalle.Producto.especie is not None:
-            response_data.update({
-                "id_especie": detalle.Producto.especie.id_especie,
-                "nombre_especie_esp": detalle.Producto.especie.nombre_esp,
-                "nombre_especie_ing": detalle.Producto.especie.nombre_ing,
-            })
-        else:
-            response_data.update({
-                "id_especie": None,
-                "nombre_especie_esp": None,
-                "nombre_especie_ing": None,
-            })
-            
-        # Información de clase
-        if detalle.Producto.clase is not None:
-            response_data.update({
-                "id_clase": detalle.Producto.clase.id_clase,
-                "nombre_clase": detalle.Producto.clase.nombre,
-            })
-        else:
-            response_data.update({
-                "id_clase": None,
-                "nombre_clase": None,
-            })
-            
-        # Datos básicos del producto (mantener para compatibilidad)
-        response_data["producto"] = {
-            "id_producto": detalle.Producto.id_producto,
-            "nombre_producto_esp": detalle.Producto.nombre_producto_esp,
-            "nombre_producto_ing": detalle.Producto.nombre_producto_ing,
-            "obs_calidad": detalle.Producto.obs_calidad,
-        }
-    else:
-        # Sin producto asociado - establecer todos los campos como null
-        response_data.update({
-            "id_especie": None,
-            "nombre_especie_esp": None,
-            "nombre_especie_ing": None,
-            "id_clase": None,
-            "nombre_clase": None,
-        })
-        response_data["producto"] = None
-    
     return response_data
 
 
@@ -116,18 +67,6 @@ def create_detalle_proforma(payload: DetalleProformaCreate, db: Session = Depend
     db.commit()
     db.refresh(obj)
     
-    # Cargar el producto con especie y clase si existe
-    if obj.id_producto:
-        obj = (db.query(DetalleProforma)
-               .options(
-                   joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
-               )
-               .options(
-                   joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
-               )
-               .filter(DetalleProforma.id_detalle_proforma == obj.id_detalle_proforma)
-               .first())
-    
     return _build_detalle_response(obj)
 
 
@@ -143,14 +82,8 @@ def list_detalle_proforma(
     # Obtener total de elementos
     total_items = db.query(DetalleProforma).count()
     
-    # Obtener elementos de la página actual con datos del producto, especie y clase
+    # Obtener elementos de la página actual
     items = (db.query(DetalleProforma)
-             .options(
-                 joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
-             )
-             .options(
-                 joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
-             )
              .offset(skip)
              .limit(page_size)
              .all())
@@ -164,14 +97,8 @@ def list_detalle_proforma(
 
 @router.get("/by-proforma/{id_proforma}", response_model=List[DetalleProformaRead], summary='GET Detalles por Proforma', description='Obtener todos los detalles de una proforma específica.')
 def get_detalles_by_proforma(id_proforma: int, db: Session = Depends(get_db)):
-    # Cargar todos los detalles de la proforma con los datos del producto, especie y clase
+    # Cargar todos los detalles de la proforma
     items = (db.query(DetalleProforma)
-             .options(
-                 joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
-             )
-             .options(
-                 joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
-             )
              .filter(DetalleProforma.id_proforma == id_proforma)
              .all())
     
@@ -181,14 +108,8 @@ def get_detalles_by_proforma(id_proforma: int, db: Session = Depends(get_db)):
 
 @router.get("/{item_id}", response_model=DetalleProformaRead, summary='GET Detalle Proforma', description='Obtener un detalle de proforma específico por ID.')
 def get_detalle_proforma(item_id: int, db: Session = Depends(get_db)):
-    # Cargar el detalle con los datos del producto, especie y clase
+    # Cargar el detalle
     item = (db.query(DetalleProforma)
-            .options(
-                joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
-            )
-            .options(
-                joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
-            )
             .filter(DetalleProforma.id_detalle_proforma == item_id)
             .first())
     
@@ -210,18 +131,6 @@ def update_detalle_proforma(item_id: int, payload: DetalleProformaUpdate, db: Se
     db.add(item)
     db.commit()
     db.refresh(item)
-    
-    # Cargar el producto actualizado con especie y clase si existe
-    if item.id_producto:
-        item = (db.query(DetalleProforma)
-                .options(
-                    joinedload(DetalleProforma.Producto).joinedload(Producto.especie)
-                )
-                .options(
-                    joinedload(DetalleProforma.Producto).joinedload(Producto.clase)
-                )
-                .filter(DetalleProforma.id_detalle_proforma == item_id)
-                .first())
     
     return _build_detalle_response(item)
 

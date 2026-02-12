@@ -1,15 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
-
-
-class ProductoBasico(BaseModel):
-    """Schema básico del producto para incluir en otros endpoints"""
-    id_producto: int = Field(..., description="ID del producto")
-    nombre_producto_esp: str = Field(..., description="Nombre del producto en español")
-    nombre_producto_ing: str = Field(..., description="Nombre del producto en inglés")
-    obs_calidad: Optional[str] = Field(None, description="Observaciones de calidad")
-    
-    model_config = ConfigDict(from_attributes=True)
+from decimal import Decimal
 
 
 class DetalleProformaCreate(BaseModel):
@@ -24,12 +15,12 @@ class DetalleProformaCreate(BaseModel):
     largo: Optional[str] = Field(None, description="Largo", max_length=20)
     id_unidad_medida_largo: Optional[int] = Field(None, description="ID unidad de medida del largo")
     piezas: Optional[int] = Field(None, description="Número de piezas")
-    cantidad: str = Field(..., description="Cantidad")
-    precio_unitario: str = Field(..., description="Precio unitario")
-    subtotal: str = Field(..., description="Subtotal")
-    volumen: Optional[str] = Field(None, description="Volumen")
-    volumen_eq: str = Field(..., description="Volumen equivalente")
-    precio_eq: str = Field(..., description="Precio equivalente")
+    cantidad: Decimal = Field(..., description="Cantidad")
+    precio_unitario: Decimal = Field(..., description="Precio unitario")
+    subtotal: Decimal = Field(..., description="Subtotal")
+    volumen: Optional[Decimal] = Field(None, description="Volumen")
+    volumen_eq: Decimal = Field(..., description="Volumen equivalente")
+    precio_eq: Decimal = Field(..., description="Precio equivalente")
 
     model_config = ConfigDict(json_schema_extra={"examples": [{
         "id_proforma": 1,
@@ -57,30 +48,12 @@ class DetalleProformaRead(BaseModel):
     largo: Optional[str] = Field(None, description="Largo")
     id_unidad_medida_largo: Optional[int] = Field(None, description="ID unidad de medida del largo")
     piezas: Optional[int] = Field(None, description="Número de piezas")
-    cantidad: str = Field(..., description="Cantidad")
-    precio_unitario: str = Field(..., description="Precio unitario")
-    subtotal: str = Field(..., description="Subtotal")
-    volumen: Optional[str] = Field(None, description="Volumen")
-    volumen_eq: str = Field(..., description="Volumen equivalente")
-    precio_eq: str = Field(..., description="Precio equivalente")
-    
-    # Product snapshot fields (immutable historical data)
-    producto_nombre_esp: Optional[str] = Field(None, description="Snapshot: Nombre del producto en español")
-    producto_nombre_ing: Optional[str] = Field(None, description="Snapshot: Nombre del producto en inglés")
-    producto_obs_calidad: Optional[str] = Field(None, description="Snapshot: Observaciones de calidad")
-    producto_especie: Optional[str] = Field(None, description="Snapshot: Nombre de la especie")
-    
-    # Especie fields (dynamic from current relationships)
-    id_especie: Optional[int] = Field(None, description="ID de la especie del producto")
-    nombre_especie_esp: Optional[str] = Field(None, description="Nombre de la especie en español")
-    nombre_especie_ing: Optional[str] = Field(None, description="Nombre de la especie en inglés")
-    
-    # Clase fields (dynamic from current relationships)
-    id_clase: Optional[int] = Field(None, description="ID de la clase del producto")
-    nombre_clase: Optional[str] = Field(None, description="Nombre de la clase")
-    
-    # Datos básicos del producto (anidados) - mantener para compatibilidad
-    producto: Optional[ProductoBasico] = Field(None, description="Datos básicos del producto")
+    cantidad: Decimal = Field(..., description="Cantidad")
+    precio_unitario: Decimal = Field(..., description="Precio unitario")
+    subtotal: Decimal = Field(..., description="Subtotal")
+    volumen: Optional[Decimal] = Field(None, description="Volumen")
+    volumen_eq: Decimal = Field(..., description="Volumen equivalente")
+    precio_eq: Decimal = Field(..., description="Precio equivalente")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -96,11 +69,11 @@ class DetalleProformaUpdate(BaseModel):
     largo: Optional[str] = Field(None, description="Largo", max_length=20)
     id_unidad_medida_largo: Optional[int] = Field(None, description="ID unidad de medida del largo")
     piezas: Optional[int] = Field(None, description="Número de piezas")
-    cantidad: Optional[str] = Field(None, description="Cantidad")
-    precio_unitario: Optional[str] = Field(None, description="Precio unitario")
-    subtotal: Optional[str] = Field(None, description="Subtotal")
-    volumen: Optional[str] = Field(None, description="Volumen")
-    volumen_eq: Optional[str] = Field(None, description="Volumen equivalente")
-    precio_eq: Optional[str] = Field(None, description="Precio equivalente")
+    cantidad: Optional[Decimal] = Field(None, description="Cantidad")
+    precio_unitario: Optional[Decimal] = Field(None, description="Precio unitario")
+    subtotal: Optional[Decimal] = Field(None, description="Subtotal")
+    volumen: Optional[Decimal] = Field(None, description="Volumen")
+    volumen_eq: Optional[Decimal] = Field(None, description="Volumen equivalente")
+    precio_eq: Optional[Decimal] = Field(None, description="Precio equivalente")
     
     model_config = ConfigDict()

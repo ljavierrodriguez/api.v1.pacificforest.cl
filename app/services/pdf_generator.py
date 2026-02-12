@@ -847,20 +847,36 @@ class ProformaPDFGenerator:
             consignar_name = self._get_cliente_nombre(oe.ConsignarA)
             notificar_name = self._get_cliente_nombre(oe.NotificarA)
 
-        facturar_country_city = f"{proforma.direccion_facturar_pais or '-'} / {proforma.direccion_facturar_ciudad or '-'}"
-        consignar_country_city = f"{proforma.direccion_consignar_pais or '-'} / {proforma.direccion_consignar_ciudad or '-'}"
-        notificar_country_city = f"{proforma.direccion_notificar_pais or '-'} / {proforma.direccion_notificar_ciudad or '-'}"
+        def _direccion_info(direccion):
+            if not direccion:
+                return {"texto": None, "ciudad": None, "pais": None, "fono_1": None}
+            ciudad = direccion.Ciudad.nombre if direccion.Ciudad else None
+            pais = direccion.Ciudad.Pais.nombre if direccion.Ciudad and direccion.Ciudad.Pais else None
+            return {
+                "texto": direccion.direccion,
+                "ciudad": ciudad,
+                "pais": pais,
+                "fono_1": direccion.fono_1,
+            }
 
-        fono_fact = proforma.direccion_facturar_fono_1 or contacto_phone or "-"
-        fono_cons = proforma.direccion_consignar_fono_1 or contacto_phone or "-"
-        fono_not = proforma.direccion_notificar_fono_1 or contacto_phone or "-"
+        dir_fact = _direccion_info(proforma.DireccionFacturar)
+        dir_cons = _direccion_info(proforma.DireccionConsignar)
+        dir_not = _direccion_info(proforma.DireccionNotificar)
+
+        facturar_country_city = f"{dir_fact['pais'] or '-'} / {dir_fact['ciudad'] or '-'}"
+        consignar_country_city = f"{dir_cons['pais'] or '-'} / {dir_cons['ciudad'] or '-'}"
+        notificar_country_city = f"{dir_not['pais'] or '-'} / {dir_not['ciudad'] or '-'}"
+
+        fono_fact = dir_fact["fono_1"] or contacto_phone or "-"
+        fono_cons = dir_cons["fono_1"] or contacto_phone or "-"
+        fono_not = dir_not["fono_1"] or contacto_phone or "-"
 
         # ===== PAGE 1 =====
         elements.append(
             self._address_block(
                 self.t("BILL_TO"),
                 facturar_name,
-                proforma.direccion_facturar_texto,
+                dir_fact["texto"],
                 fono_fact,
                 facturar_country_city,
                 contactos_html=contactos_html,
@@ -871,7 +887,7 @@ class ProformaPDFGenerator:
             self._address_block(
                 self.t("SHIP_TO"),
                 consignar_name,
-                proforma.direccion_consignar_texto,
+                dir_cons["texto"],
                 fono_cons,
                 consignar_country_city,
                 contactos_html=None,
@@ -882,7 +898,7 @@ class ProformaPDFGenerator:
             self._address_block(
                 self.t("NOTIFY"),
                 notificar_name,
-                proforma.direccion_notificar_texto,
+                dir_not["texto"],
                 fono_not,
                 notificar_country_city,
                 contactos_html=None,

@@ -32,7 +32,7 @@ class OperacionExportacion(Base):
     consignar_a       = Column(Integer, ForeignKey("cliente_proveedor.id_cliente_proveedor"), nullable=False)
     notificar_a       = Column(Integer, ForeignKey("cliente_proveedor.id_cliente_proveedor"), nullable=False)
     id_puerto_origen  = Column(Integer, ForeignKey("puerto.id_puerto"), nullable=False)
-    id_puerto_destino = Column(Integer, ForeignKey("puerto.id_puerto"), nullable=False)
+    id_puerto_destino = Column(Integer, ForeignKey("puerto.id_puerto"), nullable=True)
 
     id_forma_pago = Column(Integer, ForeignKey("forma_pago.id_forma_pago"), nullable=False)
 

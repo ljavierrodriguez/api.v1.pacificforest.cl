@@ -22,11 +22,14 @@ class ProductoRead(BaseModel):
     id_especie: Optional[int] = Field(default=None, description="Descripción de id_especie")
     nombre_producto_esp: str = Field(..., description="Descripción de nombre_producto_esp")
     nombre_producto_ing: str = Field(..., description="Descripción de nombre_producto_ing")
+    obs_calidad: Optional[str] = Field(default=None, description="Descripción de obs_calidad")
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ProductoUpdate(BaseModel):
+    id_clase: Optional[int] = None
+    id_especie: Optional[int] = None
     nombre_producto_esp: Optional[str] = None
     nombre_producto_ing: Optional[str] = None
     obs_calidad: Optional[str] = None

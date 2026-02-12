@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.schemas.agente import AgenteCreate, AgenteRead, AgenteUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 from app.models.agente import Agente
@@ -40,7 +40,13 @@ def list_agentes(
     total_items = db.query(Agente).count()
     
     # Obtener elementos de la página actual
-    items = db.query(Agente).offset(skip).limit(page_size).all()
+    items = (
+        db.query(Agente)
+        .options(joinedload(Agente.Pais))
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
     
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)
@@ -48,7 +54,12 @@ def list_agentes(
 
 @router.get("/{id_agente}", response_model=AgenteRead, summary='GET Agente por id', description='Obtener un agente por su id.')
 def get_agente(id_agente: int, db: Session = Depends(get_db)):
-    agente = db.query(Agente).filter(Agente.id_agente == id_agente).first()
+    agente = (
+        db.query(Agente)
+        .options(joinedload(Agente.Pais))
+        .filter(Agente.id_agente == id_agente)
+        .first()
+    )
     if not agente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agente no encontrado")
     return agente
@@ -56,7 +67,12 @@ def get_agente(id_agente: int, db: Session = Depends(get_db)):
 
 @router.put("/{id_agente}", response_model=AgenteRead, summary='Actualizar Agente', description='Actualizar un agente existente.')
 def update_agente(id_agente: int, payload: AgenteUpdate, db: Session = Depends(get_db)):
-    agente = db.query(Agente).filter(Agente.id_agente == id_agente).first()
+    agente = (
+        db.query(Agente)
+        .options(joinedload(Agente.Pais))
+        .filter(Agente.id_agente == id_agente)
+        .first()
+    )
     if not agente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agente no encontrado")
 
