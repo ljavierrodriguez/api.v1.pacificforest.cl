@@ -32,7 +32,7 @@ class OperacionExportacionRead(BaseModel):
     facturar_a: int = Field(..., description="ID del cliente al que se factura")
     consignar_a: int = Field(..., description="ID del cliente al que se consigna")
     notificar_a: int = Field(..., description="ID del cliente al que se notifica")
-    id_puerto_origen: int = Field(..., description="ID del puerto de origen")
+    id_puerto_origen: Optional[int] = Field(None, description="ID del puerto de origen")
     id_puerto_destino: Optional[int] = Field(None, description="ID del puerto de destino")
     id_forma_pago: int = Field(..., description="ID de la forma de pago")
     id_estado_oe: int = Field(..., description="ID del estado de la operación")
