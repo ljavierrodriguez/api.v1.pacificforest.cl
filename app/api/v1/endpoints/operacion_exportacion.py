@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from typing import List
 
 from app.db.session import get_db
@@ -47,8 +48,14 @@ def list_operacion(
     # Obtener total de elementos
     total_items = db.query(OperacionExportacion).count()
     
-    # Obtener elementos de la página actual
-    items = db.query(OperacionExportacion).offset(skip).limit(page_size).all()
+    # Obtener elementos de la página actual, desde la más reciente
+    items = (
+        db.query(OperacionExportacion)
+        .order_by(desc(OperacionExportacion.fecha), desc(OperacionExportacion.id_operacion_exportacion))
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
     
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)

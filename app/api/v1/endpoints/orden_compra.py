@@ -1,8 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import desc, func
 from typing import List
+from decimal import Decimal, InvalidOperation
 
 from app.db.session import get_db
+from app.models.detalle_orden_compra import DetalleOrdenCompra
+from app.models.detalle_proforma import DetalleProforma
 from app.models.orden_compra import OrdenCompra
 from app.schemas.orden_compra import OrdenCompraCreate, OrdenCompraRead, OrdenCompraUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
@@ -15,6 +19,23 @@ router = APIRouter(prefix="/orden_compra", tags=["orden_compra"])
 
 @router.post("/", response_model=OrdenCompraRead, status_code=201, summary='POST OrdenCompra', description='Crear una nueva orden de compra.')
 def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db)):
+    # Validar que detalles no esté vacío
+    if not payload.detalles or len(payload.detalles) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="La orden de compra debe tener al menos 1 detalle",
+        )
+
+    def _to_decimal(value) -> Decimal:
+        if value is None:
+            return Decimal("0")
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal("0")
+
     obj = OrdenCompra(
         id_proforma=payload.id_proforma,
         id_proforma_anterior=payload.id_proforma_anterior,
@@ -41,6 +62,42 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
         vinculado=payload.vinculado,
     )
     db.add(obj)
+    db.flush()
+
+    # Validar que el volumen total no supere el volumen pendiente de la proforma.
+    if payload.id_proforma:
+        volumen_payload = sum(_to_decimal(detalle.volumen_eq) for detalle in payload.detalles)
+
+        volumen_proforma_total = db.query(
+            func.coalesce(func.sum(DetalleProforma.volumen_eq), 0)
+        ).filter(DetalleProforma.id_proforma == payload.id_proforma).scalar()
+
+        volumen_odc_total = db.query(
+            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+        ).join(
+            OrdenCompra,
+            DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
+        ).filter(OrdenCompra.id_proforma == payload.id_proforma).scalar()
+
+        pendiente = _to_decimal(volumen_proforma_total) - _to_decimal(volumen_odc_total)
+        if volumen_payload > pendiente:
+            if pendiente <= 0:
+                raise HTTPException(
+                    status_code=403,
+                    detail="El volumen de la proforma ya fue completado",
+                )
+            raise HTTPException(
+                status_code=403,
+                detail=f"El volumen total de la orden supera el pendiente de la proforma ({pendiente})",
+            )
+
+    for detalle in payload.detalles:
+        detalle_obj = DetalleOrdenCompra(
+            id_orden_compra=obj.id_orden_compra,
+            **detalle.model_dump(exclude_unset=True),
+        )
+        db.add(detalle_obj)
+
     db.commit()
     db.refresh(obj)
     return obj
@@ -58,8 +115,14 @@ def list_orden_compra(
     # Obtener total de elementos
     total_items = db.query(OrdenCompra).count()
     
-    # Obtener elementos de la página actual
-    items = db.query(OrdenCompra).offset(skip).limit(page_size).all()
+    # Obtener elementos de la página actual, desde la más reciente
+    items = (
+        db.query(OrdenCompra)
+        .order_by(desc(OrdenCompra.fecha_emision), desc(OrdenCompra.id_orden_compra))
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
     
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)

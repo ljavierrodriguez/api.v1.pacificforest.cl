@@ -4,6 +4,25 @@ from datetime import date
 from decimal import Decimal
 
 
+class OrdenCompraDetalleCreate(BaseModel):
+    id_producto: Optional[int] = None
+    id_unidad_venta: Optional[int] = None
+    texto_abierto: Optional[str] = Field(None, max_length=200)
+    espesor: Optional[str] = Field(None, max_length=20)
+    id_unidad_medida_espesor: Optional[int] = None
+    ancho: Optional[str] = Field(None, max_length=20)
+    id_unidad_medida_ancho: Optional[int] = None
+    largo: Optional[str] = Field(None, max_length=20)
+    id_unidad_medida_largo: Optional[int] = None
+    cantidad: Optional[Decimal] = None
+    precio_unitario: Optional[Decimal] = None
+    subtotal: Optional[Decimal] = None
+    volumen: Optional[Decimal] = None
+    volumen_eq: Optional[Decimal] = None
+    precio_eq: Optional[Decimal] = None
+    odc_salida: Optional[int] = None
+
+
 class OrdenCompraCreate(BaseModel):
     id_proforma: Optional[int] = None
     id_proforma_anterior: Optional[int] = None
@@ -28,8 +47,35 @@ class OrdenCompraCreate(BaseModel):
     id_estado_odc: int = Field(..., description="ID del estado de la orden de compra")
     id_direccion_proveedor: int = Field(..., description="ID de la dirección del proveedor")
     vinculado: Optional[int] = None
+    detalles: list[OrdenCompraDetalleCreate] = Field(
+        ...,
+        min_length=1,
+        description="Detalles de la orden de compra (mínimo 1 item requerido)",
+    )
 
-    model_config = ConfigDict(json_schema_extra={"examples": [{"fecha_emision": "2024-01-15", "id_cliente_proveedor": 1, "id_usuario_encargado": 1, "fecha_entrega": "2024-02-15", "id_bodega": 1, "id_moneda": 1, "id_usuario": 1, "valor_neto": 1000.00, "iva": 190.00, "valor_total": 1190.00, "id_estado_odc": 1, "id_direccion_proveedor": 1}]})
+    model_config = ConfigDict(json_schema_extra={"examples": [{
+        "fecha_emision": "2024-01-15",
+        "id_cliente_proveedor": 1,
+        "id_usuario_encargado": 1,
+        "fecha_entrega": "2024-02-15",
+        "id_bodega": 1,
+        "id_moneda": 1,
+        "id_usuario": 1,
+        "valor_neto": 1000.00,
+        "iva": 190.00,
+        "valor_total": 1190.00,
+        "id_estado_odc": 1,
+        "id_direccion_proveedor": 1,
+        "detalles": [
+            {
+                "id_producto": 1,
+                "cantidad": 100,
+                "precio_unitario": 10,
+                "subtotal": 1000,
+                "volumen_eq": 100
+            }
+        ]
+    }]})
 
 
 class OrdenCompraRead(BaseModel):
