@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -42,6 +43,34 @@ def list_puerto(
     # Obtener elementos de la página actual
     items = db.query(Puerto).offset(skip).limit(page_size).all()
     
+    # Crear respuesta paginada
+    return create_paginated_response(items, page, page_size, total_items)
+
+
+@router.get("/search", response_model=PaginatedPuertoResponse, summary='SEARCH Puerto', description='Buscar puertos por texto con paginación.')
+def search_puerto(
+    q: str = Query(..., min_length=1, description="Texto a buscar en nombre o descripción"),
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    # Calcular offset
+    skip = (page - 1) * page_size
+
+    search = f"%{q.strip()}%"
+    query = db.query(Puerto).filter(
+        or_(
+            Puerto.nombre.ilike(search),
+            Puerto.descripcion.ilike(search),
+        )
+    )
+
+    # Obtener total de elementos filtrados
+    total_items = query.count()
+
+    # Obtener elementos de la página actual
+    items = query.offset(skip).limit(page_size).all()
+
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)
 
