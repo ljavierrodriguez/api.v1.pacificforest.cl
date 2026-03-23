@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
+from app.dependencies.permissions import require_permission
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.detalle_proforma import DetalleProforma
 from app.models.orden_compra import OrdenCompra
@@ -16,6 +17,43 @@ DetalleOrdenCompraCreate,
 from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/detalle_orden_compra", tags=["detalle_orden_compra"])
+
+
+def _validate_producto_vs_proforma(
+    db: Session,
+    proforma_id: int,
+    id_producto: int | None,
+) -> None:
+    productos_proforma = {
+        product_id
+        for (product_id,) in (
+            db.query(DetalleProforma.id_producto)
+            .filter(DetalleProforma.id_proforma == proforma_id)
+            .distinct()
+            .all()
+        )
+        if product_id is not None
+    }
+
+    if not productos_proforma:
+        if id_producto is not None:
+            raise HTTPException(
+                status_code=403,
+                detail="La proforma asociada no tiene productos definidos; no se puede asignar id_producto en el detalle",
+            )
+        return
+
+    if id_producto is None:
+        raise HTTPException(
+            status_code=403,
+            detail="La proforma asociada tiene productos definidos; el detalle debe incluir id_producto",
+        )
+
+    if id_producto not in productos_proforma:
+        raise HTTPException(
+            status_code=403,
+            detail=f"El producto {id_producto} no existe en la proforma asociada",
+        )
 
 
 def _update_proforma_estado(db: Session, proforma_id: int) -> None:
@@ -51,11 +89,14 @@ def _update_proforma_estado(db: Session, proforma_id: int) -> None:
     db.add(proforma)
 
 
-@router.post("/", response_model=DetalleOrdenCompraRead, summary='POST Detalle Orden Compra', description='POST Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
+@router.post("/", response_model=DetalleOrdenCompraRead, summary='POST Detalle Orden Compra', description='POST Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.', dependencies=[Depends(require_permission("orden_compra", "create"))])
 def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_db)):
     orden = db.get(OrdenCompra, payload.id_orden_compra)
     if not orden:
         raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
+
+    if orden.id_proforma:
+        _validate_producto_vs_proforma(db, orden.id_proforma, payload.id_producto)
 
     if orden.id_proforma and payload.volumen_eq is not None:
         volumen_proforma_total = db.query(
@@ -108,7 +149,7 @@ def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_
     return obj
 
 
-@router.get("/", summary='GET Detalle Orden Compra', description='GET Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/", summary='GET Detalle Orden Compra', description='GET Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.', dependencies=[Depends(require_permission("orden_compra", "read"))])
 def list_detalles(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
@@ -127,7 +168,7 @@ def list_detalles(
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=DetalleOrdenCompraRead, summary='GET Detalle Orden Compra', description='GET Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/{item_id}", response_model=DetalleOrdenCompraRead, summary='GET Detalle Orden Compra', description='GET Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.', dependencies=[Depends(require_permission("orden_compra", "read"))])
 def get_detalle(item_id: int, db: Session = Depends(get_db)):
     item = db.get(DetalleOrdenCompra, item_id)
     if not item:
@@ -135,7 +176,7 @@ def get_detalle(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-@router.put("/{item_id}", response_model=DetalleOrdenCompraRead, summary='PUT Detalle Orden Compra', description='PUT Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
+@router.put("/{item_id}", response_model=DetalleOrdenCompraRead, summary='PUT Detalle Orden Compra', description='PUT Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.', dependencies=[Depends(require_permission("orden_compra", "update"))])
 def update_detalle(item_id: int, payload: DetalleOrdenCompraUpdate, db: Session = Depends(get_db)):
     item = db.get(DetalleOrdenCompra, item_id)
     if not item:
@@ -143,6 +184,10 @@ def update_detalle(item_id: int, payload: DetalleOrdenCompraUpdate, db: Session 
 
     orden = db.get(OrdenCompra, item.id_orden_compra)
     new_volumen_eq = payload.volumen_eq if payload.volumen_eq is not None else item.volumen_eq
+    new_id_producto = payload.id_producto if payload.id_producto is not None else item.id_producto
+
+    if orden and orden.id_proforma:
+        _validate_producto_vs_proforma(db, orden.id_proforma, new_id_producto)
 
     if orden and orden.id_proforma and new_volumen_eq is not None:
         volumen_proforma_total = db.query(
@@ -197,7 +242,7 @@ def update_detalle(item_id: int, payload: DetalleOrdenCompraUpdate, db: Session 
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE Detalle Orden Compra', description='DELETE Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
+@router.delete("/{item_id}", summary='DELETE Detalle Orden Compra', description='DELETE Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.', dependencies=[Depends(require_permission("orden_compra", "delete"))])
 def delete_detalle(item_id: int, db: Session = Depends(get_db)):
     item = db.get(DetalleOrdenCompra, item_id)
     if not item:

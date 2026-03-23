@@ -5,6 +5,7 @@ from typing import List
 from decimal import Decimal, InvalidOperation
 
 from app.db.session import get_db
+from app.dependencies.permissions import require_permission
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.detalle_proforma import DetalleProforma
 from app.models.orden_compra import OrdenCompra
@@ -17,7 +18,7 @@ PaginatedOrdenCompraResponse = create_paginated_response_model(OrdenCompraRead)
 router = APIRouter(prefix="/orden_compra", tags=["orden_compra"])
 
 
-@router.post("/", response_model=OrdenCompraRead, status_code=201, summary='POST OrdenCompra', description='Crear una nueva orden de compra.')
+@router.post("/", response_model=OrdenCompraRead, status_code=201, summary='POST OrdenCompra', description='Crear una nueva orden de compra.', dependencies=[Depends(require_permission("orden_compra", "create"))])
 def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db)):
     # Validar que detalles no esté vacío
     if not payload.detalles or len(payload.detalles) == 0:
@@ -66,6 +67,36 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
 
     # Validar que el volumen total no supere el volumen pendiente de la proforma.
     if payload.id_proforma:
+        productos_proforma = {
+            product_id
+            for (product_id,) in (
+                db.query(DetalleProforma.id_producto)
+                .filter(DetalleProforma.id_proforma == payload.id_proforma)
+                .distinct()
+                .all()
+            )
+            if product_id is not None
+        }
+
+        productos_odc = {
+            detalle.id_producto
+            for detalle in payload.detalles
+            if detalle.id_producto is not None
+        }
+
+        if productos_proforma and not productos_odc:
+            raise HTTPException(
+                status_code=403,
+                detail="La proforma asociada tiene productos definidos; la orden de compra debe incluir id_producto en sus detalles",
+            )
+
+        productos_no_permitidos = productos_odc - productos_proforma
+        if productos_no_permitidos:
+            raise HTTPException(
+                status_code=403,
+                detail=f"La orden de compra incluye producto(s) que no existen en la proforma: {sorted(productos_no_permitidos)}",
+            )
+
         volumen_payload = sum(_to_decimal(detalle.volumen_eq) for detalle in payload.detalles)
 
         volumen_proforma_total = db.query(
@@ -103,7 +134,7 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     return obj
 
 
-@router.get("/", response_model=PaginatedOrdenCompraResponse, summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.')
+@router.get("/", response_model=PaginatedOrdenCompraResponse, summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.', dependencies=[Depends(require_permission("orden_compra", "read"))])
 def list_orden_compra(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
@@ -128,7 +159,7 @@ def list_orden_compra(
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=OrdenCompraRead, summary='GET OrdenCompra', description='Obtener una orden de compra específica por ID.')
+@router.get("/{item_id}", response_model=OrdenCompraRead, summary='GET OrdenCompra', description='Obtener una orden de compra específica por ID.', dependencies=[Depends(require_permission("orden_compra", "read"))])
 def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
@@ -136,7 +167,7 @@ def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-@router.put("/{item_id}", response_model=OrdenCompraRead, summary='PUT OrdenCompra', description='Actualizar una orden de compra existente.')
+@router.put("/{item_id}", response_model=OrdenCompraRead, summary='PUT OrdenCompra', description='Actualizar una orden de compra existente.', dependencies=[Depends(require_permission("orden_compra", "update"))])
 def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
@@ -149,7 +180,7 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE OrdenCompra', description='Eliminar una orden de compra.')
+@router.delete("/{item_id}", summary='DELETE OrdenCompra', description='Eliminar una orden de compra.', dependencies=[Depends(require_permission("orden_compra", "delete"))])
 def delete_orden_compra(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
