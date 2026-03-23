@@ -15,7 +15,7 @@ class OrdenCompraDetalleCreate(BaseModel):
     largo: Optional[str] = Field(None, max_length=20)
     id_unidad_medida_largo: Optional[int] = None
     cantidad: Optional[Decimal] = None
-    precio_unitario: Optional[Decimal] = None
+    precio_unitario: Decimal = Field(..., description="Precio unitario del producto (requerido)")
     subtotal: Optional[Decimal] = None
     volumen: Optional[Decimal] = None
     volumen_eq: Optional[Decimal] = None

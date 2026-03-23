@@ -25,7 +25,7 @@ class DetalleOrdenCompra(Base):
     id_unidad_medida_largo = Column(Integer, ForeignKey("unidad_medida.id_unidad_medida"))
 
     cantidad = Column(Numeric(12, 3))
-    precio_unitario = Column(Numeric(12, 3))
+    precio_unitario = Column(Numeric(12, 3), nullable=False)
     subtotal = Column(Numeric(12, 3))
 
     volumen = Column(Numeric(12, 3))
