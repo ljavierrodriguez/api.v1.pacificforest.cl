@@ -5,6 +5,7 @@ from app.schemas.user import UserCreate, UserRead, Token, TokenWithUser
 from app.schemas.pagination import create_paginated_response
 from app.models.usuario import User
 from app.db.session import get_db
+from app.core.config import settings
 from app.core.security import create_access_token, authenticate_user, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -96,7 +97,7 @@ def login_for_access_token(
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=True,
+            secure=settings.COOKIE_SECURE,
             samesite="lax",
         )
     return {

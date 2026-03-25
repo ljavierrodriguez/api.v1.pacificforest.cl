@@ -12,6 +12,7 @@ from app.db.base import Base
 from app.db.session import engine_db
 from app.core.security import create_access_token, get_current_user_from_cookie
 from fastapi.templating import Jinja2Templates
+import jwt
 from app.api.v1 import router
 
 # Intentar crear tablas (si la base de datos no está accesible, ignorar durante import)
@@ -53,9 +54,30 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
+
+def get_docs_user_from_cookie(request: Request):
+    token = None
+    try:
+        token = request.cookies.get("docs_access_token")
+    except Exception:
+        return None
+
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username = payload.get("sub")
+        role = payload.get("role")
+        if not username:
+            return None
+        return {"username": username, "role": role}
+    except Exception:
+        return None
+
 @app.get("/login", response_class=HTMLResponse, include_in_schema=False)
 def login_form(request: Request):
-    user = get_current_user_from_cookie(request)
+    user = get_docs_user_from_cookie(request)
     if user:  # ya logueado
         return RedirectResponse(url="/", status_code=303)
 
@@ -69,13 +91,13 @@ def login(username: str = Form(...), password: str = Form(...)):
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
         response = RedirectResponse(url="/", status_code=302)
-        response.set_cookie(key="access_token", value=token, httponly=True)
+        response.set_cookie(key="docs_access_token", value=token, httponly=True)
         return response
     return HTMLResponse("<h3>Usuario o contraseña incorrectos</h3>", status_code=401)
 
 @app.get("/", include_in_schema=False)
 def protected_redoc(request: Request):
-    user = get_current_user_from_cookie(request)
+    user = get_docs_user_from_cookie(request)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/login")
 
@@ -84,7 +106,7 @@ def protected_redoc(request: Request):
 
 @app.get("/openapi.json", include_in_schema=False)
 def openapi(request: Request):
-    user = get_current_user_from_cookie(request)
+    user = get_docs_user_from_cookie(request)
     if not user or user["role"] != "admin":
         raise HTTPException(status_code=403, detail="No autorizado")
     return get_openapi(title="Mi API", version="1.0.0", routes=app.routes)
@@ -95,5 +117,5 @@ def openapi(request: Request):
 @app.get("/logout", include_in_schema=False)
 def logout():
     response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie("access_token")
+    response.delete_cookie("docs_access_token")
     return response

@@ -20,6 +20,10 @@ class Settings(BaseSettings):
 
     PASSWORD_RESET_URL: str = "http://localhost:5173/reset-password"
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
+    COOKIE_SECURE: bool = False
+
+    # Comma-separated user logins/emails that bypass module permission checks.
+    PERMISSIONS_BYPASS_USERS: str = ""
 
     model_config = ConfigDict(env_file=".env")
 

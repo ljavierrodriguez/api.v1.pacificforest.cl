@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.seguridad import Seguridad
@@ -23,7 +24,21 @@ _METHOD_TO_ACTION = {
 }
 
 
+def _is_bypass_user(user: User) -> bool:
+    raw_users = settings.PERMISSIONS_BYPASS_USERS or ""
+    allowed_users = {item.strip().lower() for item in raw_users.split(",") if item.strip()}
+    if not allowed_users:
+        return False
+
+    user_login = (user.login or "").strip().lower()
+    user_email = (user.correo or "").strip().lower()
+    return user_login in allowed_users or user_email in allowed_users
+
+
 def _check_permission(db: Session, user: User, modulo: str, action: str) -> None:
+    if _is_bypass_user(user):
+        return
+
     action_key = (action or "").strip().lower()
     if action_key not in _ACTION_TO_COLUMN:
         raise ValueError(f"Accion de permiso no soportada: {action}")

@@ -28,6 +28,15 @@ CREATE DATABASE pfidb1;
 cp .env.example .env
 ```
 
+# Dar acceso total de modulos a un usuario especifico (opcional)
+
+En tu archivo `.env` puedes definir usuarios (login o correo) que omitiran la validacion
+de permisos por modulo:
+
+```env
+PERMISSIONS_BYPASS_USERS=miusuario,miusuario@dominio.com
+```
+
 # Iniciar el proyecto
 
 ```bash
