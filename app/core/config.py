@@ -1,8 +1,13 @@
 from dotenv import load_dotenv
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 
-load_dotenv()
+ROOT_DIR = Path(__file__).resolve().parents[2]
+ENV_FILE = ROOT_DIR / ".env"
+
+# Cargar .env desde la raiz del proyecto para evitar diferencias por directorio de ejecucion.
+load_dotenv(dotenv_path=ENV_FILE)
 
 class Settings(BaseSettings):
     # Valores por defecto mínimos para permitir importación en entornos de desarrollo
@@ -25,7 +30,7 @@ class Settings(BaseSettings):
     # Comma-separated user logins/emails that bypass module permission checks.
     PERMISSIONS_BYPASS_USERS: str = ""
 
-    model_config = ConfigDict(env_file=".env")
+    model_config = ConfigDict(env_file=str(ENV_FILE))
 
 
 # Crear una instancia de Settings

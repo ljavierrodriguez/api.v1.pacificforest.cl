@@ -23,6 +23,17 @@ router = APIRouter(prefix="/proforma", tags=["proforma"])
 
 @router.post("/", response_model=ProformaRead, status_code=201, summary='POST Proforma', description='Crear una nueva proforma.', dependencies=[Depends(require_permission("proforma", "create"))])
 def create_proforma(payload: ProformaCreate, db: Session = Depends(get_db)):
+    # Validar que no exista ya una proforma para esta operación de exportación
+    existing_proforma = db.query(Proforma).filter(
+        Proforma.id_operacion_exportacion == payload.id_operacion_exportacion
+    ).first()
+    
+    if existing_proforma:
+        raise HTTPException(
+            status_code=409, 
+            detail=f"Ya existe una proforma (ID: {existing_proforma.id_proforma}) para esta operación de exportación."
+        )
+    
     obj = Proforma(
         id_operacion_exportacion=payload.id_operacion_exportacion,
         id_contenedor=payload.id_contenedor,

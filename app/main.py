@@ -12,6 +12,7 @@ from app.db.base import Base
 from app.db.session import engine_db
 from app.core.security import create_access_token, get_current_user_from_cookie
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.engine import make_url
 import jwt
 from app.api.v1 import router
 
@@ -53,6 +54,16 @@ os.makedirs(static_path, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 templates = Jinja2Templates(directory="templates")
+
+
+@app.on_event("startup")
+def log_database_target() -> None:
+    try:
+        db_url = make_url(settings.DATABASE_URL_DB)
+        safe_url = f"{db_url.drivername}://{db_url.username}:***@{db_url.host}:{db_url.port}/{db_url.database}"
+        print(f"[DB] DATABASE_URL_DB activo: {safe_url}")
+    except Exception:
+        print("[DB] No se pudo parsear DATABASE_URL_DB")
 
 
 def get_docs_user_from_cookie(request: Request):
