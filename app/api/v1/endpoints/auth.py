@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session, joinedload
+from datetime import timedelta
 from app.schemas.user import UserCreate, UserRead, Token, TokenWithUser
 from app.schemas.pagination import create_paginated_response
 from app.models.usuario import User
@@ -90,7 +91,10 @@ def login_for_access_token(
     user = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == user.id_usuario).first()
 
     
-    access_token = create_access_token({"sub": user.login})
+    access_token = create_access_token(
+        {"sub": user.login},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
     # Optionally set token in cookie for browser clients
     if response:
         response.set_cookie(
