@@ -2,7 +2,6 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.seguridad import Seguridad
@@ -24,50 +23,7 @@ _METHOD_TO_ACTION = {
 }
 
 
-def _normalize_bypass_entry(value: str) -> str:
-    """Normalize env entries to tolerate quotes and list-like values from hosting panels."""
-    normalized = (value or "").strip().lower()
-    if not normalized:
-        return ""
-
-    # Common wrappers users paste in env vars, e.g. "user", 'user', [user]
-    normalized = normalized.strip("\"'")
-    normalized = normalized.strip("[]")
-    normalized = normalized.strip("\"'")
-    return normalized
-
-
-def _get_bypass_users() -> set[str]:
-    raw_users = settings.PERMISSIONS_BYPASS_USERS or ""
-    if not raw_users:
-        return set()
-
-    separators_normalized = raw_users.replace(";", ",").replace("\n", ",")
-    users: set[str] = set()
-    for item in separators_normalized.split(","):
-        normalized_item = _normalize_bypass_entry(item)
-        if normalized_item:
-            users.add(normalized_item)
-    return users
-
-
-def _is_bypass_user(user: User) -> bool:
-    allowed_users = _get_bypass_users()
-    if not allowed_users:
-        return False
-
-    if "*" in allowed_users:
-        return True
-
-    user_login = (user.login or "").strip().lower()
-    user_email = (user.correo or "").strip().lower()
-    return user_login in allowed_users or user_email in allowed_users
-
-
 def _check_permission(db: Session, user: User, modulo: str, action: str) -> None:
-    if _is_bypass_user(user):
-        return
-
     action_key = (action or "").strip().lower()
     if action_key not in _ACTION_TO_COLUMN:
         raise ValueError(f"Accion de permiso no soportada: {action}")
