@@ -24,11 +24,40 @@ _METHOD_TO_ACTION = {
 }
 
 
-def _is_bypass_user(user: User) -> bool:
+def _normalize_bypass_entry(value: str) -> str:
+    """Normalize env entries to tolerate quotes and list-like values from hosting panels."""
+    normalized = (value or "").strip().lower()
+    if not normalized:
+        return ""
+
+    # Common wrappers users paste in env vars, e.g. "user", 'user', [user]
+    normalized = normalized.strip("\"'")
+    normalized = normalized.strip("[]")
+    normalized = normalized.strip("\"'")
+    return normalized
+
+
+def _get_bypass_users() -> set[str]:
     raw_users = settings.PERMISSIONS_BYPASS_USERS or ""
-    allowed_users = {item.strip().lower() for item in raw_users.split(",") if item.strip()}
+    if not raw_users:
+        return set()
+
+    separators_normalized = raw_users.replace(";", ",").replace("\n", ",")
+    users: set[str] = set()
+    for item in separators_normalized.split(","):
+        normalized_item = _normalize_bypass_entry(item)
+        if normalized_item:
+            users.add(normalized_item)
+    return users
+
+
+def _is_bypass_user(user: User) -> bool:
+    allowed_users = _get_bypass_users()
     if not allowed_users:
         return False
+
+    if "*" in allowed_users:
+        return True
 
     user_login = (user.login or "").strip().lower()
     user_email = (user.correo or "").strip().lower()
