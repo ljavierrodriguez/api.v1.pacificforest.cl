@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
-from typing import List
+from typing import Any, Dict, List
 from sqlalchemy.orm import Session, joinedload
 import os
 import shutil
 from datetime import datetime
 
 from app.db.session import get_db
+from app.models.seguridad import Seguridad
 from app.models.usuario import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate, PasswordResetConfirm
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
@@ -17,6 +18,48 @@ from app.services.email import send_email
 PaginatedUserResponse = create_paginated_response_model(UserRead)
 
 router = APIRouter(prefix="/usuario", tags=["usuario"])
+
+
+def _normalize_permission_entry(modulo: str, values: Dict[str, Any]) -> Dict[str, Any] | None:
+    modulo_clean = str(modulo or "").strip()
+    if not modulo_clean:
+        return None
+
+    return {
+        "modulo": modulo_clean,
+        "crear": bool(values.get("crear", values.get("create", False))),
+        "ver": bool(values.get("ver", values.get("read", False))),
+        "editar": bool(values.get("editar", values.get("update", False))),
+        "eliminar": bool(values.get("eliminar", values.get("delete", False))),
+    }
+
+
+def _extract_seguridades_from_payload(payload: Any) -> List[Dict[str, Any]]:
+    normalized: Dict[str, Dict[str, Any]] = {}
+
+    for seg in getattr(payload, "seguridades", []) or []:
+        item = _normalize_permission_entry(
+            getattr(seg, "modulo", ""),
+            {
+                "crear": getattr(seg, "crear", False),
+                "ver": getattr(seg, "ver", False),
+                "editar": getattr(seg, "editar", False),
+                "eliminar": getattr(seg, "eliminar", False),
+            },
+        )
+        if item:
+            normalized[item["modulo"].lower()] = item
+
+    for map_name in ("permisos", "permissions"):
+        permission_map = getattr(payload, map_name, None) or {}
+        for modulo, values in permission_map.items():
+            if not isinstance(values, dict):
+                continue
+            item = _normalize_permission_entry(modulo, values)
+            if item:
+                normalized[item["modulo"].lower()] = item
+
+    return list(normalized.values())
 
 
 @router.post("/", response_model=UserRead, summary='Crear usuario', description='Crear un nuevo usuario.')
@@ -42,9 +85,14 @@ def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
     )
     user.set_password(payload.password)
     db.add(user)
+    db.flush()
+
+    for seguridad_data in _extract_seguridades_from_payload(payload):
+        db.add(Seguridad(id_usuario=user.id_usuario, **seguridad_data))
+
     db.commit()
-    db.refresh(user)
-    
+    user = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == user.id_usuario).first()
+
     return user.to_dict()
 
 
@@ -118,6 +166,12 @@ def update_usuario(
     for field in ("nombre", "telefono", "activo", "url_firma"):
         if field in data:
             setattr(item, field, data[field])
+
+    if any(key in data for key in ("seguridades", "permisos", "permissions")):
+        item.seguridades = [
+            Seguridad(id_usuario=item.id_usuario, **seguridad_data)
+            for seguridad_data in _extract_seguridades_from_payload(payload)
+        ]
 
     db.add(item)
     db.commit()

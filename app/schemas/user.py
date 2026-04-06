@@ -1,5 +1,5 @@
 
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from app.schemas.seguridad import SeguridadRead
 
@@ -29,9 +29,29 @@ class UserBase(BaseModel):
     telefono: str = Field(..., description="Teléfono del usuario")
 
 
+class UserSeguridadInput(BaseModel):
+    modulo: str = Field(..., max_length=15, description="Nombre del módulo")
+    crear: bool = Field(default=False, description="Permiso para crear")
+    ver: bool = Field(default=False, description="Permiso para ver")
+    editar: bool = Field(default=False, description="Permiso para editar")
+    eliminar: bool = Field(default=False, description="Permiso para eliminar")
+
+
 class UserCreate(UserBase):
     password: str
     url_firma: Optional[str] = Field(None, description="URL de la imagen de firma del usuario")
+    seguridades: List[UserSeguridadInput] = Field(
+        default_factory=list,
+        description="Permisos iniciales del usuario por módulo, con valores true/false"
+    )
+    permisos: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Compatibilidad: permisos por módulo con claves en español"
+    )
+    permissions: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Permisos por módulo con claves en inglés"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -43,7 +63,23 @@ class UserCreate(UserBase):
                     "correo": "johndoe_new@example.com",
                     "telefono": "+56912345678",
                     "password": "newstrongpassword",
-                    "url_firma": "https://example.com/firmas/johndoe.png"
+                    "url_firma": "https://example.com/firmas/johndoe.png",
+                    "seguridades": [
+                        {
+                            "modulo": "proforma",
+                            "crear": True,
+                            "ver": True,
+                            "editar": False,
+                            "eliminar": False
+                        },
+                        {
+                            "modulo": "usuario",
+                            "crear": False,
+                            "ver": True,
+                            "editar": False,
+                            "eliminar": False
+                        }
+                    ]
                 }
             ]
         }
@@ -52,6 +88,7 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id_usuario: int
+    activo: bool = Field(default=True, description="Indica si el usuario está activo")
     url_firma: Optional[str] = Field(None, description="URL de la imagen de firma del usuario")
     seguridades: List[SeguridadRead] = Field(default_factory=list, description="Lista de permisos de seguridad del usuario")
 
@@ -62,12 +99,17 @@ class UserRead(UserBase):
         if isinstance(v, str):
             return v.title()
         return v
-    
-    permissions: Dict[str, Dict[str, bool]] = Field(
+
+    permisos: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Permisos normalizados por módulo: {MODULO: {create, read, update, delete}}"
+        description="Compatibilidad: permisos por módulo con claves en español {MODULO: {crear, ver, editar, eliminar, id_seguridad}}"
     )
-    
+
+    permissions: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Permisos normalizados por módulo: {MODULO: {create, read, update, delete, id_seguridad}}"
+    )
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -80,6 +122,9 @@ class UserUpdate(BaseModel):
     telefono: Optional[str] = None
     url_firma: Optional[str] = Field(None, description="URL de la imagen de firma del usuario")
     activo: Optional[bool] = None
+    seguridades: Optional[List[UserSeguridadInput]] = None
+    permisos: Optional[Dict[str, Dict[str, Any]]] = None
+    permissions: Optional[Dict[str, Dict[str, Any]]] = None
 
     model_config = ConfigDict(
         json_schema_extra={

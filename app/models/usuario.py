@@ -85,19 +85,31 @@ class User(Base):
     """
     def to_dict(self) -> dict:
         permissions_by_mod = {}
+        permisos_by_mod = {}
         seguridades = self.seguridades or []
 
         for s in seguridades:
             modulo = (s.modulo or "").strip().upper()
             if not modulo:
-                    continue
+                continue
+
+            id_seguridad = getattr(s, "id_seguridad", None)
 
             permissions_by_mod[modulo] = {
+                "id_seguridad": id_seguridad,
                 "create": bool(s.crear),
                 "read": bool(s.ver),
                 "update": bool(s.editar),
                 "delete": bool(s.eliminar),
-                }
+            }
+
+            permisos_by_mod[modulo] = {
+                "id_seguridad": id_seguridad,
+                "crear": bool(s.crear),
+                "ver": bool(s.ver),
+                "editar": bool(s.editar),
+                "eliminar": bool(s.eliminar),
+            }
 
         return {
             "id_usuario": self.id_usuario,
@@ -112,6 +124,9 @@ class User(Base):
             # legacy (lista)
             "seguridades": [s.to_dict() for s in seguridades],
 
+            # compatibilidad (mapa)
+            "permisos": permisos_by_mod,
+
             # nuevo (mapa)
             "permissions": permissions_by_mod,
-            }
+        }
