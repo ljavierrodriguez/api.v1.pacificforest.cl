@@ -12,6 +12,7 @@ from app.schemas.user import UserCreate, UserRead, UserUpdate, PasswordResetConf
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 from app.core.security import create_password_reset_token, verify_password_reset_token
 from app.core.config import settings
+from app.dependencies.permissions import require_permission
 from app.services.email import send_email
 
 # Crear el modelo de respuesta paginada para Usuario
@@ -62,7 +63,13 @@ def _extract_seguridades_from_payload(payload: Any) -> List[Dict[str, Any]]:
     return list(normalized.values())
 
 
-@router.post("/", response_model=UserRead, summary='Crear usuario', description='Crear un nuevo usuario.')
+@router.post(
+    "/",
+    response_model=UserRead,
+    summary='Crear usuario',
+    description='Crear un nuevo usuario.',
+    dependencies=[Depends(require_permission("usuario", "create"))],
+)
 def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
     # Normalizar login a minúsculas para hacerlo case-insensitive
     login_lower = payload.login.lower() if payload.login else ""
@@ -96,7 +103,13 @@ def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
     return user.to_dict()
 
 
-@router.get("/", response_model=PaginatedUserResponse, summary='Listar usuarios', description='Lista paginada de usuarios')
+@router.get(
+    "/",
+    response_model=PaginatedUserResponse,
+    summary='Listar usuarios',
+    description='Lista paginada de usuarios',
+    dependencies=[Depends(require_permission("usuario", "read"))],
+)
 def list_usuarios(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
@@ -116,7 +129,13 @@ def list_usuarios(
 
 
 
-@router.get("/{item_id}", response_model=UserRead, summary="Obtener usuario", description="Obtener usuario por `id_usuario`")
+@router.get(
+    "/{item_id}",
+    response_model=UserRead,
+    summary="Obtener usuario",
+    description="Obtener usuario por `id_usuario`",
+    dependencies=[Depends(require_permission("usuario", "read"))],
+)
 def get_usuario(item_id: int, db: Session = Depends(get_db)):
     item = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == item_id).first()
     if not item:
@@ -125,7 +144,13 @@ def get_usuario(item_id: int, db: Session = Depends(get_db)):
 
 
 
-@router.put("/{item_id}", response_model=UserRead, summary='Actualizar usuario', description='Actualiza los campos del usuario (parcial).')
+@router.put(
+    "/{item_id}",
+    response_model=UserRead,
+    summary='Actualizar usuario',
+    description='Actualiza los campos del usuario (parcial).',
+    dependencies=[Depends(require_permission("usuario", "update"))],
+)
 def update_usuario(
     item_id: int,
     payload: UserUpdate,
@@ -200,7 +225,12 @@ def update_usuario(
     return item.to_dict()
 
 
-@router.post("/{item_id}/reset-password", summary="Restablecer contraseña", description="Envía un link de restablecimiento al correo del usuario.")
+@router.post(
+    "/{item_id}/reset-password",
+    summary="Restablecer contraseña",
+    description="Envía un link de restablecimiento al correo del usuario.",
+    dependencies=[Depends(require_permission("usuario", "update"))],
+)
 def reset_usuario_password(
     item_id: int,
     db: Session = Depends(get_db),
@@ -248,7 +278,12 @@ def confirm_reset_password(payload: PasswordResetConfirm, db: Session = Depends(
     return {"ok": True}
 
 
-@router.post("/{item_id}/firma", summary='Subir firma del usuario', description='Sube una imagen de firma para el usuario.')
+@router.post(
+    "/{item_id}/firma",
+    summary='Subir firma del usuario',
+    description='Sube una imagen de firma para el usuario.',
+    dependencies=[Depends(require_permission("usuario", "update"))],
+)
 def upload_firma(item_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     # Verificar que el usuario existe
     item = db.query(User).filter(User.id_usuario == item_id).first()
@@ -285,7 +320,12 @@ def upload_firma(item_id: int, file: UploadFile = File(...), db: Session = Depen
     return {"url_firma": url_firma, "message": "Firma subida exitosamente"}
 
 
-@router.delete("/{item_id}", summary='Eliminar usuario', description='Elimina un usuario por `id_usuario`.')
+@router.delete(
+    "/{item_id}",
+    summary='Eliminar usuario',
+    description='Elimina un usuario por `id_usuario`.',
+    dependencies=[Depends(require_permission("usuario", "delete"))],
+)
 def delete_usuario(item_id: int, db: Session = Depends(get_db)):
     item = db.get(User, item_id)
     if not item:
