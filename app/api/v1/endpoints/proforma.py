@@ -8,7 +8,6 @@ import os
 import shutil
 from datetime import datetime
 from app.db.session import get_db
-from app.dependencies.permissions import require_permission
 from app.models.proforma import Proforma
 from app.schemas.proforma import ProformaCreate, ProformaRead, ProformaUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
@@ -20,7 +19,7 @@ PaginatedProformaResponse = create_paginated_response_model(ProformaRead)
 router = APIRouter(prefix="/proforma", tags=["proforma"])
 
 
-@router.post("/", response_model=ProformaRead, status_code=201, summary='POST Proforma', description='Crear una nueva proforma.', dependencies=[Depends(require_permission("proforma", "create"))])
+@router.post("/", response_model=ProformaRead, status_code=201, summary='POST Proforma', description='Crear una nueva proforma.')
 def create_proforma(payload: ProformaCreate, db: Session = Depends(get_db)):
     # Validar que no exista ya una proforma para esta operación de exportación
     existing_proforma = db.query(Proforma).filter(
@@ -64,7 +63,7 @@ def create_proforma(payload: ProformaCreate, db: Session = Depends(get_db)):
     return obj
 
 
-@router.get("/", response_model=PaginatedProformaResponse, summary='GET Proforma', description='Obtener lista de proformas con paginación.', dependencies=[Depends(require_permission("proforma", "read"))])
+@router.get("/", response_model=PaginatedProformaResponse, summary='GET Proforma', description='Obtener lista de proformas con paginación.')
 def list_proforma(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
@@ -89,7 +88,7 @@ def list_proforma(
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=ProformaRead, summary='GET Proforma', description='Obtener una proforma específica por ID.', dependencies=[Depends(require_permission("proforma", "read"))])
+@router.get("/{item_id}", response_model=ProformaRead, summary='GET Proforma', description='Obtener una proforma específica por ID.')
 def get_proforma(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Proforma, item_id)
     if not item:
@@ -97,7 +96,7 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-@router.put("/{item_id}", response_model=ProformaRead, summary='PUT Proforma', description='Actualizar una proforma existente.', dependencies=[Depends(require_permission("proforma", "update"))])
+@router.put("/{item_id}", response_model=ProformaRead, summary='PUT Proforma', description='Actualizar una proforma existente.')
 def update_proforma(item_id: int, payload: ProformaUpdate, db: Session = Depends(get_db)):
     item = db.get(Proforma, item_id)
     if not item:
@@ -110,7 +109,7 @@ def update_proforma(item_id: int, payload: ProformaUpdate, db: Session = Depends
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE Proforma', description='Eliminar una proforma.', dependencies=[Depends(require_permission("proforma", "delete"))])
+@router.delete("/{item_id}", summary='DELETE Proforma', description='Eliminar una proforma.')
 def delete_proforma(item_id: int, db: Session = Depends(get_db)):
     item = db.get(Proforma, item_id)
     if not item:
@@ -148,7 +147,7 @@ def delete_proforma(item_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.post("/{item_id}/imagen", summary='Subir imagen de la proforma', description='Sube una imagen para asociarla a la proforma.', dependencies=[Depends(require_permission("proforma", "update"))])
+@router.post("/{item_id}/imagen", summary='Subir imagen de la proforma', description='Sube una imagen para asociarla a la proforma.')
 def upload_imagen_proforma(item_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Sube una imagen para la proforma y actualiza el campo url_imagen.
@@ -190,7 +189,7 @@ def upload_imagen_proforma(item_id: int, file: UploadFile = File(...), db: Sessi
     }
 
 
-@router.get("/{item_id}/pdf/spanish", summary='Descargar PDF Proforma Español', description='Descarga la proforma en formato PDF en español.', dependencies=[Depends(require_permission("proforma", "read"))])
+@router.get("/{item_id}/pdf/spanish", summary='Descargar PDF Proforma Español', description='Descarga la proforma en formato PDF en español.')
 def get_proforma_pdf_spanish(item_id: int, db: Session = Depends(get_db)):
     """Genera y descarga el PDF de la proforma en español"""
     proforma = db.get(Proforma, item_id)
@@ -211,7 +210,7 @@ def get_proforma_pdf_spanish(item_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
 
 
-@router.get("/{item_id}/pdf/english", summary='Descargar PDF Proforma Inglés', description='Descarga la proforma en formato PDF en inglés.', dependencies=[Depends(require_permission("proforma", "read"))])
+@router.get("/{item_id}/pdf/english", summary='Descargar PDF Proforma Inglés', description='Descarga la proforma en formato PDF en inglés.')
 def get_proforma_pdf_english(item_id: int, db: Session = Depends(get_db)):
     """Genera y descarga el PDF de la proforma en inglés"""
     proforma = db.get(Proforma, item_id)
@@ -232,7 +231,7 @@ def get_proforma_pdf_english(item_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
 
 
-@router.get("/{item_id}/pdf", summary='Descargar PDF Proforma', description='Descarga ambos PDFs (español e inglés) de la proforma.', dependencies=[Depends(require_permission("proforma", "read"))])
+@router.get("/{item_id}/pdf", summary='Descargar PDF Proforma', description='Descarga ambos PDFs (español e inglés) de la proforma.')
 def get_proforma_pdf_both(item_id: int, language: str = Query('es', description='Idioma del PDF (es, en)'), db: Session = Depends(get_db)):
     """Genera y descarga el PDF de la proforma en el idioma solicitado"""
     proforma = db.get(Proforma, item_id)

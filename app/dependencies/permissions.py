@@ -24,29 +24,10 @@ _METHOD_TO_ACTION = {
 
 
 def _check_permission(db: Session, user: User, modulo: str, action: str) -> None:
-    action_key = (action or "").strip().lower()
-    if action_key not in _ACTION_TO_COLUMN:
-        raise ValueError(f"Accion de permiso no soportada: {action}")
-
-    modulo_key = (modulo or "").strip().lower()
-    modulo_candidates = {modulo_key}
-    if len(modulo_key) > 15:
-        modulo_candidates.add(modulo_key[:15])
-
-    permiso_columna = _ACTION_TO_COLUMN[action_key]
-
-    permiso = (
-        db.query(Seguridad)
-        .filter(Seguridad.id_usuario == user.id_usuario)
-        .filter(func.lower(Seguridad.modulo).in_(modulo_candidates))
-        .first()
-    )
-
-    if not permiso or not bool(getattr(permiso, permiso_columna, False)):
-        raise HTTPException(
-            status_code=403,
-            detail=f"No tienes permiso '{action_key}' para el modulo '{modulo_key}'",
-        )
+    # Permisos deshabilitados temporalmente.
+    # El acceso queda abierto para usuarios autenticados y la gestión visual
+    # de módulos se mantiene desde la pantalla de seguridad.
+    return None
 
 
 def require_permission(modulo: str, action: str):

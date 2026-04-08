@@ -5,6 +5,66 @@ from app.models.seguridad import Seguridad
 
 # Import security helpers lazily inside methods to avoid circular imports
 
+OPEN_ACCESS_MODULES = (
+    "AGENTE",
+    "BODEGA",
+    "CIUDAD",
+    "CLASE",
+    "CLAUSULA_VENTA",
+    "CLIENTE_PROV",
+    "CLIENTE_PROVEEDOR",
+    "CONTACTO",
+    "CONTACTO_ODC",
+    "CONTACTO_ORDEN_COMPRA",
+    "CONTACTO_PROF",
+    "CONTACTO_PROFORMA",
+    "CONTENEDOR",
+    "DETALLE_FACTURA",
+    "DETALLE_GASTO",
+    "DETALLE_IDE",
+    "DETALLE_ORDEN_COMPRA",
+    "DETALLE_PL",
+    "DETALLE_PROFORMA",
+    "DIRECCION",
+    "DOCUMENTO_IDE",
+    "EMPRESA",
+    "ESPECIE",
+    "ESTADO_DET_PLE",
+    "ESTADO_ODC",
+    "ESTADO_OE",
+    "ESTADO_PL",
+    "ESTADO_PROFORMA",
+    "EXPORTACION",
+    "FACTURA",
+    "FORMA_PAGO",
+    "GASTO",
+    "IDE",
+    "INFORME",
+    "INFORMES",
+    "INVENTARIO",
+    "MANTENEDORES",
+    "MONEDA",
+    "NAVIERA",
+    "OPER_EXPORT",
+    "OPERACION_EXPORTACION",
+    "ORDENCOMPRA",
+    "ORDEN_COMPRA",
+    "PAIS",
+    "PARAMETRO",
+    "PLC",
+    "PLE",
+    "PRODUCTO",
+    "PROFITANDLOSS",
+    "PROFORMA",
+    "PUERTO",
+    "SEGURIDAD",
+    "TIPO_COMISION",
+    "TIPO_ENVASE",
+    "UNIDAD_MEDIDA",
+    "UNIDAD_VENTA",
+    "USUARIO",
+)
+
 
 class User(Base):
     __tablename__ = "usuario"
@@ -87,28 +147,52 @@ class User(Base):
         permissions_by_mod = {}
         permisos_by_mod = {}
         seguridades = self.seguridades or []
+        seguridades_response = []
 
         for s in seguridades:
             modulo = (s.modulo or "").strip().upper()
             if not modulo:
                 continue
 
-            id_seguridad = getattr(s, "id_seguridad", None)
+            id_seguridad = getattr(s, "id_seguridad", 0) or 0
 
             permissions_by_mod[modulo] = {
                 "id_seguridad": id_seguridad,
-                "create": bool(s.crear),
-                "read": bool(s.ver),
-                "update": bool(s.editar),
-                "delete": bool(s.eliminar),
+                "create": True,
+                "read": True,
+                "update": True,
+                "delete": True,
             }
 
             permisos_by_mod[modulo] = {
                 "id_seguridad": id_seguridad,
-                "crear": bool(s.crear),
-                "ver": bool(s.ver),
-                "editar": bool(s.editar),
-                "eliminar": bool(s.eliminar),
+                "crear": True,
+                "ver": True,
+                "editar": True,
+                "eliminar": True,
+            }
+
+            seguridad_data = s.to_dict()
+            seguridad_data["crear"] = True
+            seguridad_data["ver"] = True
+            seguridad_data["editar"] = True
+            seguridad_data["eliminar"] = True
+            seguridades_response.append(seguridad_data)
+
+        for modulo in OPEN_ACCESS_MODULES:
+            permissions_by_mod[modulo] = {
+                "id_seguridad": permissions_by_mod.get(modulo, {}).get("id_seguridad", 0),
+                "create": True,
+                "read": True,
+                "update": True,
+                "delete": True,
+            }
+            permisos_by_mod[modulo] = {
+                "id_seguridad": permisos_by_mod.get(modulo, {}).get("id_seguridad", 0),
+                "crear": True,
+                "ver": True,
+                "editar": True,
+                "eliminar": True,
             }
 
         return {
@@ -122,7 +206,7 @@ class User(Base):
             "activo": bool(self.activo),
 
             # legacy (lista)
-            "seguridades": [s.to_dict() for s in seguridades],
+            "seguridades": seguridades_response,
 
             # compatibilidad (mapa)
             "permisos": permisos_by_mod,

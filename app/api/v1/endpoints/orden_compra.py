@@ -5,7 +5,6 @@ from typing import List
 from decimal import Decimal, InvalidOperation
 
 from app.db.session import get_db
-from app.dependencies.permissions import require_permission
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.detalle_proforma import DetalleProforma
 from app.models.orden_compra import OrdenCompra
@@ -18,7 +17,7 @@ PaginatedOrdenCompraResponse = create_paginated_response_model(OrdenCompraRead)
 router = APIRouter(prefix="/orden_compra", tags=["orden_compra"])
 
 
-@router.post("/", response_model=OrdenCompraRead, status_code=201, summary='POST OrdenCompra', description='Crear una nueva orden de compra.', dependencies=[Depends(require_permission("orden_compra", "create"))])
+@router.post("/", response_model=OrdenCompraRead, status_code=201, summary='POST OrdenCompra', description='Crear una nueva orden de compra.')
 def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db)):
     # Validar que detalles no esté vacío
     if not payload.detalles or len(payload.detalles) == 0:
@@ -134,7 +133,7 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     return obj
 
 
-@router.get("/", response_model=PaginatedOrdenCompraResponse, summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.', dependencies=[Depends(require_permission("orden_compra", "read"))])
+@router.get("/", response_model=PaginatedOrdenCompraResponse, summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.')
 def list_orden_compra(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
@@ -159,7 +158,7 @@ def list_orden_compra(
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=OrdenCompraRead, summary='GET OrdenCompra', description='Obtener una orden de compra específica por ID.', dependencies=[Depends(require_permission("orden_compra", "read"))])
+@router.get("/{item_id}", response_model=OrdenCompraRead, summary='GET OrdenCompra', description='Obtener una orden de compra específica por ID.')
 def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
@@ -167,7 +166,7 @@ def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
-@router.put("/{item_id}", response_model=OrdenCompraRead, summary='PUT OrdenCompra', description='Actualizar una orden de compra existente.', dependencies=[Depends(require_permission("orden_compra", "update"))])
+@router.put("/{item_id}", response_model=OrdenCompraRead, summary='PUT OrdenCompra', description='Actualizar una orden de compra existente.')
 def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
@@ -180,7 +179,7 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
     return item
 
 
-@router.delete("/{item_id}", summary='DELETE OrdenCompra', description='Eliminar una orden de compra.', dependencies=[Depends(require_permission("orden_compra", "delete"))])
+@router.delete("/{item_id}", summary='DELETE OrdenCompra', description='Eliminar una orden de compra.')
 def delete_orden_compra(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
