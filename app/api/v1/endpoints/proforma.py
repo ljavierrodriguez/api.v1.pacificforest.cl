@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, select, literal_column
+from sqlalchemy import desc, func, select, literal_column, cast, Numeric
 from typing import List
 from io import BytesIO
 import os
@@ -78,13 +78,13 @@ def list_proforma(
     # Obtener total de elementos
     total_items = db.query(Proforma).count()
     
-    # Subconsulta para volumen total de proforma
+    # Subconsulta para volumen total de proforma (cast de String a Numeric, manejando comas)
     volumen_total_sub = db.query(
         DetalleProforma.id_proforma,
-        func.sum(func.coalesce(DetalleProforma.volumen_eq, 0)).label("vol_total")
+        func.sum(cast(func.coalesce(func.replace(DetalleProforma.volumen_eq, ',', '.'), '0'), Numeric(12, 3))).label("vol_total")
     ).group_by(DetalleProforma.id_proforma).subquery()
 
-    # Subconsulta para volumen total por OC
+    # Subconsulta para volumen total por OC (Numeric(12, 3) ya es numérico)
     volumen_per_oc_sub = db.query(
         DetalleOrdenCompra.id_orden_compra,
         func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, 0)).label("vol_oc")
@@ -101,9 +101,9 @@ def list_proforma(
     # Consulta principal con joins
     query = db.query(
         Proforma,
-        func.coalesce(volumen_total_sub.c.vol_total, 0).label("vol_total_final"),
-        func.coalesce(oc_summary_sub.c.vol_asig, 0).label("vol_asig_final"),
-        func.coalesce(oc_summary_sub.c.cnt_oc, 0).label("oc_cnt_final")
+        func.coalesce(volumen_total_sub.c.vol_total, 0).label("volumenTotal"),
+        func.coalesce(oc_summary_sub.c.vol_asig, 0).label("volumenAsignado"),
+        func.coalesce(oc_summary_sub.c.cnt_oc, 0).label("oc_asociadas")
     ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
      .outerjoin(oc_summary_sub, Proforma.id_proforma == oc_summary_sub.c.id_proforma)\
      .order_by(desc(Proforma.fecha_emision), desc(Proforma.id_proforma))\
@@ -112,9 +112,14 @@ def list_proforma(
     results = query.all()
     
     items = []
-    for proforma, vol_total, vol_asig, oc_cnt in results:
+    for row in results:
+        proforma = row[0]
+        vol_total = float(row[1] or 0)
+        vol_asig = float(row[2] or 0)
+        oc_cnt = int(row[3] or 0)
+        
         # Calcular campos adicionales
-        vol_pend = max(float(vol_total) - float(vol_asig), 0)
+        vol_pend = max(vol_total - vol_asig, 0)
         
         estado_flujo = 'sin-oc'
         if oc_cnt == 0:
