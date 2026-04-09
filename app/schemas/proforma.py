@@ -73,6 +73,14 @@ class ProformaRead(BaseModel):
     oc_asociadas: Optional[int] = Field(0, description="Cantidad de OCs asociadas")
     estadoFlujo: Optional[str] = Field('sin-oc', description="Estado del flujo (sin-oc, parcial, completado)")
 
+    # Etiquetas de texto para evitar buscar en mantenedores del frontend
+    empresa_nombre: Optional[str] = Field(None, description="Nombre de la empresa")
+    moneda_nombre: Optional[str] = Field(None, description="Etiqueta o nombre de la moneda")
+    estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
+    usuario_nombre: Optional[str] = Field(None, description="Nombre del usuario encargado")
+    facturar_a_nombre: Optional[str] = Field(None, description="Nombre del cliente a facturar")
+    oe_numero: Optional[str] = Field(None, description="Número de la OE asociada")
+
     model_config = ConfigDict(from_attributes=True)
 
 

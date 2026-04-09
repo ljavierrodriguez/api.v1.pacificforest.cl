@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy import desc, func, select, literal_column, cast, Numeric
 from typing import List
 from io import BytesIO
@@ -12,6 +12,13 @@ from app.models.proforma import Proforma
 from app.models.detalle_proforma import DetalleProforma
 from app.models.orden_compra import OrdenCompra
 from app.models.detalle_orden_compra import DetalleOrdenCompra
+from app.models.empresa import Empresa
+from app.models.moneda import Moneda
+from app.models.estado_proforma import EstadoProforma
+from app.models.usuario import User
+from app.models.direccion import Direccion
+from app.models.cliente_proveedor import ClienteProveedor
+from app.models.operacion_exportacion import OperacionExportacion
 from app.schemas.proforma import ProformaCreate, ProformaRead, ProformaUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 from app.services.pdf_generator import ProformaPDFGenerator
@@ -98,14 +105,31 @@ def list_proforma(
     ).outerjoin(volumen_per_oc_sub, OrdenCompra.id_orden_compra == volumen_per_oc_sub.c.id_orden_compra)\
      .group_by(OrdenCompra.id_proforma).subquery()
 
-    # Consulta principal con joins
+    # Alias para joins de direcciones (facturar)
+    DirFacturar = aliased(Direccion)
+    CPFacturar = aliased(ClienteProveedor)
+
+    # Consulta principal con joins para etiquetas
     query = db.query(
         Proforma,
         func.coalesce(volumen_total_sub.c.vol_total, 0).label("volumenTotal"),
         func.coalesce(oc_summary_sub.c.vol_asig, 0).label("volumenAsignado"),
-        func.coalesce(oc_summary_sub.c.cnt_oc, 0).label("oc_asociadas")
+        func.coalesce(oc_summary_sub.c.cnt_oc, 0).label("oc_asociadas"),
+        Empresa.nombre_fantasia.label("empresa_nombre"),
+        Moneda.etiqueta.label("moneda_nombre"),
+        EstadoProforma.nombre.label("estado_nombre"),
+        User.nombre.label("usuario_nombre"),
+        CPFacturar.razon_social.label("facturar_a_nombre"),
+        OperacionExportacion.numero_operacion.label("oe_numero")
     ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
      .outerjoin(oc_summary_sub, Proforma.id_proforma == oc_summary_sub.c.id_proforma)\
+     .outerjoin(Empresa, Proforma.id_empresa == Empresa.id_empresa)\
+     .outerjoin(Moneda, Proforma.id_moneda == Moneda.id_moneda)\
+     .outerjoin(EstadoProforma, Proforma.id_estado_proforma == EstadoProforma.id_estado_proforma)\
+     .outerjoin(User, Proforma.id_usuario_encargado == User.id_usuario)\
+     .outerjoin(OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion)\
+     .outerjoin(DirFacturar, Proforma.id_direccion_facturar == DirFacturar.id_direccion)\
+     .outerjoin(CPFacturar, DirFacturar.id_cliente_proveedor == CPFacturar.id_cliente_proveedor)\
      .order_by(desc(Proforma.fecha_emision), desc(Proforma.id_proforma))\
      .offset(skip).limit(page_size)
 
@@ -136,7 +160,13 @@ def list_proforma(
             "volumenAsignado": vol_asig,
             "volumenPendiente": vol_pend,
             "oc_asociadas": oc_cnt,
-            "estadoFlujo": estado_flujo
+            "estadoFlujo": estado_flujo,
+            "empresa_nombre": row.empresa_nombre,
+            "moneda_nombre": row.moneda_nombre,
+            "estado_nombre": row.estado_nombre,
+            "usuario_nombre": row.usuario_nombre,
+            "facturar_a_nombre": row.facturar_a_nombre,
+            "oe_numero": row.oe_numero
         })
         items.append(item_dict)
     
