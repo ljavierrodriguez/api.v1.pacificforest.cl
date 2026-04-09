@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func, select, literal_column
 from typing import List
 from io import BytesIO
 import os
@@ -9,6 +9,9 @@ import shutil
 from datetime import datetime
 from app.db.session import get_db
 from app.models.proforma import Proforma
+from app.models.detalle_proforma import DetalleProforma
+from app.models.orden_compra import OrdenCompra
+from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.schemas.proforma import ProformaCreate, ProformaRead, ProformaUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 from app.services.pdf_generator import ProformaPDFGenerator
@@ -75,14 +78,62 @@ def list_proforma(
     # Obtener total de elementos
     total_items = db.query(Proforma).count()
     
-    # Obtener elementos de la página actual, desde la más reciente
-    items = (
-        db.query(Proforma)
-        .order_by(desc(Proforma.fecha_emision), desc(Proforma.id_proforma))
-        .offset(skip)
-        .limit(page_size)
-        .all()
-    )
+    # Subconsulta para volumen total de proforma
+    volumen_total_sub = db.query(
+        DetalleProforma.id_proforma,
+        func.sum(func.coalesce(DetalleProforma.volumen_eq, 0)).label("vol_total")
+    ).group_by(DetalleProforma.id_proforma).subquery()
+
+    # Subconsulta para volumen total por OC
+    volumen_per_oc_sub = db.query(
+        DetalleOrdenCompra.id_orden_compra,
+        func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, 0)).label("vol_oc")
+    ).group_by(DetalleOrdenCompra.id_orden_compra).subquery()
+
+    # Subconsulta para volumen asignado y conteo de OCs por Proforma
+    oc_summary_sub = db.query(
+        OrdenCompra.id_proforma,
+        func.count(OrdenCompra.id_orden_compra).label("cnt_oc"),
+        func.sum(func.coalesce(volumen_per_oc_sub.c.vol_oc, 0)).label("vol_asig")
+    ).outerjoin(volumen_per_oc_sub, OrdenCompra.id_orden_compra == volumen_per_oc_sub.c.id_orden_compra)\
+     .group_by(OrdenCompra.id_proforma).subquery()
+
+    # Consulta principal con joins
+    query = db.query(
+        Proforma,
+        func.coalesce(volumen_total_sub.c.vol_total, 0).label("vol_total_final"),
+        func.coalesce(oc_summary_sub.c.vol_asig, 0).label("vol_asig_final"),
+        func.coalesce(oc_summary_sub.c.cnt_oc, 0).label("oc_cnt_final")
+    ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
+     .outerjoin(oc_summary_sub, Proforma.id_proforma == oc_summary_sub.c.id_proforma)\
+     .order_by(desc(Proforma.fecha_emision), desc(Proforma.id_proforma))\
+     .offset(skip).limit(page_size)
+
+    results = query.all()
+    
+    items = []
+    for proforma, vol_total, vol_asig, oc_cnt in results:
+        # Calcular campos adicionales
+        vol_pend = max(float(vol_total) - float(vol_asig), 0)
+        
+        estado_flujo = 'sin-oc'
+        if oc_cnt == 0:
+            estado_flujo = 'sin-oc'
+        elif vol_pend < 0.01:
+            estado_flujo = 'completado'
+        else:
+            estado_flujo = 'parcial'
+            
+        # Convertir a esquema ProformaRead
+        item_dict = proforma.__dict__.copy()
+        item_dict.update({
+            "volumenTotal": vol_total,
+            "volumenAsignado": vol_asig,
+            "volumenPendiente": vol_pend,
+            "oc_asociadas": oc_cnt,
+            "estadoFlujo": estado_flujo
+        })
+        items.append(item_dict)
     
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)

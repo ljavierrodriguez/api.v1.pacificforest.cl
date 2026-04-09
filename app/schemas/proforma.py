@@ -65,6 +65,14 @@ class ProformaRead(BaseModel):
     id_direccion_facturar: int = Field(..., description="ID de la dirección de facturación")
     id_direccion_consignar: int = Field(..., description="ID de la dirección de consignación")
     id_direccion_notificar: int = Field(..., description="ID de la dirección de notificación")
+    
+    # Campos calculados añadidos para optimizar el listado
+    volumenTotal: Optional[Decimal] = Field(0, description="Volumen total de la proforma")
+    volumenAsignado: Optional[Decimal] = Field(0, description="Volumen asignado en OCs")
+    volumenPendiente: Optional[Decimal] = Field(0, description="Volumen pendiente")
+    oc_asociadas: Optional[int] = Field(0, description="Cantidad de OCs asociadas")
+    estadoFlujo: Optional[str] = Field('sin-oc', description="Estado del flujo (sin-oc, parcial, completado)")
+
     model_config = ConfigDict(from_attributes=True)
 
 
