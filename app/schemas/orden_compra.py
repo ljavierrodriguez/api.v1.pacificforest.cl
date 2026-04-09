@@ -104,6 +104,17 @@ class OrdenCompraRead(BaseModel):
     id_direccion_proveedor: int = Field(..., description="ID de la dirección del proveedor")
     vinculado: Optional[int] = None
 
+    # Campos calculados añadidos para optimizar el listado
+    volumenTotal: Optional[Decimal] = Field(0, description="Volumen total de la orden")
+    
+    # Etiquetas de texto para evitar buscar en mantenedores del frontend
+    proveedor_nombre: Optional[str] = Field(None, description="Nombre del proveedor")
+    usuario_nombre: Optional[str] = Field(None, description="Nombre del usuario encargado")
+    moneda_nombre: Optional[str] = Field(None, description="Nombre de la moneda")
+    bodega_nombre: Optional[str] = Field(None, description="Nombre de la bodega")
+    empresa_nombre: Optional[str] = Field(None, description="Nombre de la empresa")
+    estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
+
     model_config = ConfigDict(from_attributes=True)
 
 

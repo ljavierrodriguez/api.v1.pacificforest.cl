@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import desc, func, select, literal_column, cast, Numeric
+from sqlalchemy import desc, func, select, literal_column, cast, Numeric, String
 from typing import List
 from io import BytesIO
 import os
@@ -85,10 +85,10 @@ def list_proforma(
     # Obtener total de elementos
     total_items = db.query(Proforma).count()
     
-    # Subconsulta para volumen total de proforma (cast de String a Numeric, manejando comas)
+    # Subconsulta para volumen total de proforma (forzamos String antes de replace por si acaso)
     volumen_total_sub = db.query(
         DetalleProforma.id_proforma,
-        func.sum(cast(func.coalesce(func.replace(DetalleProforma.volumen_eq, ',', '.'), '0'), Numeric(12, 3))).label("vol_total")
+        func.sum(cast(func.coalesce(func.replace(cast(DetalleProforma.volumen_eq, String), ',', '.'), '0'), Numeric(12, 3))).label("vol_total")
     ).group_by(DetalleProforma.id_proforma).subquery()
 
     # Subconsulta para volumen total por OC (Numeric(12, 3) ya es numérico)
@@ -120,7 +120,7 @@ def list_proforma(
         EstadoProforma.nombre.label("estado_nombre"),
         User.nombre.label("usuario_nombre"),
         CPFacturar.razon_social.label("facturar_a_nombre"),
-        OperacionExportacion.numero_operacion.label("oe_numero")
+        OperacionExportacion.id_operacion_exportacion.label("oe_numero")
     ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
      .outerjoin(oc_summary_sub, Proforma.id_proforma == oc_summary_sub.c.id_proforma)\
      .outerjoin(Empresa, Proforma.id_empresa == Empresa.id_empresa)\
@@ -164,9 +164,9 @@ def list_proforma(
             "empresa_nombre": row.empresa_nombre,
             "moneda_nombre": row.moneda_nombre,
             "estado_nombre": row.estado_nombre,
-            "usuario_nombre": row.usuario_nombre,
-            "facturar_a_nombre": row.facturar_a_nombre,
-            "oe_numero": row.oe_numero
+            "usuario_nombre": str(row.usuario_nombre) if row.usuario_nombre else None,
+            "facturar_a_nombre": str(row.facturar_a_nombre) if row.facturar_a_nombre else None,
+            "oe_numero": str(row.oe_numero) if row.oe_numero else None
         })
         items.append(item_dict)
     

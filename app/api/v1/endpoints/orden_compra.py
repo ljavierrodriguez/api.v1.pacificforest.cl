@@ -8,6 +8,12 @@ from app.db.session import get_db
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.detalle_proforma import DetalleProforma
 from app.models.orden_compra import OrdenCompra
+from app.models.cliente_proveedor import ClienteProveedor
+from app.models.usuario import User
+from app.models.moneda import Moneda
+from app.models.bodega import Bodega
+from app.models.empresa import Empresa
+from app.models.estado_odc import EstadoOdc
 from app.schemas.orden_compra import OrdenCompraCreate, OrdenCompraRead, OrdenCompraUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 
@@ -133,28 +139,69 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     return obj
 
 
+from app.models.proforma import Proforma
+from app.models.operacion_exportacion import OperacionExportacion
+
+# ... (omitting other imports)
+
 @router.get("/", response_model=PaginatedOrdenCompraResponse, summary='GET OrdenCompra', description='Obtener lista de órdenes de compra con paginación.')
 def list_orden_compra(
-    page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100)
 ):
-    # Calcular offset
     skip = (page - 1) * page_size
     
     # Obtener total de elementos
     total_items = db.query(OrdenCompra).count()
     
-    # Obtener elementos de la página actual, desde la más reciente
-    items = (
-        db.query(OrdenCompra)
-        .order_by(desc(OrdenCompra.fecha_emision), desc(OrdenCompra.id_orden_compra))
-        .offset(skip)
-        .limit(page_size)
-        .all()
-    )
+    # Subconsulta para volumen total por OC
+    volumen_sub = db.query(
+        DetalleOrdenCompra.id_orden_compra,
+        func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, 0)).label("vol_total")
+    ).group_by(DetalleOrdenCompra.id_orden_compra).subquery()
+
+    # Consulta principal con joins para etiquetas
+    query = db.query(
+        OrdenCompra,
+        func.coalesce(volumen_sub.c.vol_total, 0).label("volumenTotal"),
+        ClienteProveedor.razon_social.label("proveedor_nombre"),
+        User.nombre.label("usuario_nombre"),
+        Moneda.etiqueta.label("moneda_nombre"),
+        Bodega.nombre.label("bodega_nombre"),
+        Empresa.nombre_fantasia.label("empresa_nombre"),
+        EstadoOdc.nombre.label("estado_nombre"),
+        OperacionExportacion.id_operacion_exportacion.label("oe_numero")
+    ).outerjoin(volumen_sub, OrdenCompra.id_orden_compra == volumen_sub.c.id_orden_compra)\
+     .outerjoin(ClienteProveedor, OrdenCompra.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)\
+     .outerjoin(User, OrdenCompra.id_usuario_encargado == User.id_usuario)\
+     .outerjoin(Moneda, OrdenCompra.id_moneda == Moneda.id_moneda)\
+     .outerjoin(Bodega, OrdenCompra.id_bodega == Bodega.id_bodega)\
+     .outerjoin(Empresa, OrdenCompra.id_empresa == Empresa.id_empresa)\
+     .outerjoin(EstadoOdc, OrdenCompra.id_estado_odc == EstadoOdc.id_estado_odc)\
+     .outerjoin(Proforma, OrdenCompra.id_proforma == Proforma.id_proforma)\
+     .outerjoin(OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion)\
+     .order_by(desc(OrdenCompra.fecha_emision), desc(OrdenCompra.id_orden_compra))\
+     .offset(skip).limit(page_size)
+
+    results = query.all()
     
-    # Crear respuesta paginada
+    items = []
+    for row in results:
+        oc = row[0]
+        item_dict = oc.__dict__.copy()
+        item_dict.update({
+            "volumenTotal": row.volumenTotal,
+            "proveedor_nombre": row.proveedor_nombre,
+            "usuario_nombre": row.usuario_nombre,
+            "moneda_nombre": row.moneda_nombre,
+            "bodega_nombre": row.bodega_nombre,
+            "empresa_nombre": row.empresa_nombre,
+            "estado_nombre": row.estado_nombre,
+            "oe_numero": str(row.oe_numero) if row.oe_numero else None
+        })
+        items.append(item_dict)
+    
     return create_paginated_response(items, page, page_size, total_items)
 
 
