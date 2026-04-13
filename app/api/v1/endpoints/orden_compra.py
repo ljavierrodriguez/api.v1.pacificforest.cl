@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List
@@ -16,6 +17,7 @@ from app.models.empresa import Empresa
 from app.models.estado_odc import EstadoOdc
 from app.schemas.orden_compra import OrdenCompraCreate, OrdenCompraRead, OrdenCompraUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
+from app.services.pdf_generator import OrdenCompraPDFGenerator
 
 # Crear el modelo de respuesta paginada para OrdenCompra
 PaginatedOrdenCompraResponse = create_paginated_response_model(OrdenCompraRead)
@@ -266,3 +268,70 @@ def delete_orden_compra(item_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al eliminar la orden de compra: {str(e)}")
+
+
+@router.get("/{item_id}/pdf/spanish", summary='Descargar PDF Orden de Compra Español', description='Descarga la orden de compra en formato PDF en español.')
+def get_odc_pdf_spanish(item_id: int, db: Session = Depends(get_db)):
+    """Genera y descarga el PDF de la orden de compra en español."""
+    orden_compra = db.get(OrdenCompra, item_id)
+    if not orden_compra:
+        raise HTTPException(status_code=404, detail="OrdenCompra not found")
+
+    try:
+        generator = OrdenCompraPDFGenerator(language="es")
+        pdf_buffer = generator.generate_pdf(orden_compra, db)
+        pdf_buffer.seek(0)
+        return StreamingResponse(
+            iter([pdf_buffer.getvalue()]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=OrdenCompra_{item_id}_ES.pdf"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
+
+
+@router.get("/{item_id}/pdf/english", summary='Descargar PDF Orden de Compra Inglés', description='Descarga la orden de compra en formato PDF en inglés.')
+def get_odc_pdf_english(item_id: int, db: Session = Depends(get_db)):
+    """Genera y descarga el PDF de la orden de compra en inglés."""
+    orden_compra = db.get(OrdenCompra, item_id)
+    if not orden_compra:
+        raise HTTPException(status_code=404, detail="OrdenCompra not found")
+
+    try:
+        generator = OrdenCompraPDFGenerator(language="en")
+        pdf_buffer = generator.generate_pdf(orden_compra, db)
+        pdf_buffer.seek(0)
+        return StreamingResponse(
+            iter([pdf_buffer.getvalue()]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=OrdenCompra_{item_id}_EN.pdf"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
+
+
+@router.get("/{item_id}/pdf", summary='Descargar PDF Orden de Compra', description='Descarga la orden de compra en formato PDF. Parámetro lang: es (default) o en.')
+def get_odc_pdf(
+    item_id: int,
+    language: str = Query("es", description="Idioma del PDF (es, en)"),
+    db: Session = Depends(get_db),
+):
+    """Genera y descarga el PDF de la orden de compra en el idioma solicitado."""
+    orden_compra = db.get(OrdenCompra, item_id)
+    if not orden_compra:
+        raise HTTPException(status_code=404, detail="OrdenCompra not found")
+
+    lang = language.lower() if language.lower() in ("es", "en") else "es"
+    lang_suffix = "ES" if lang == "es" else "EN"
+
+    try:
+        generator = OrdenCompraPDFGenerator(language=lang)
+        pdf_buffer = generator.generate_pdf(orden_compra, db)
+        pdf_buffer.seek(0)
+        return StreamingResponse(
+            iter([pdf_buffer.getvalue()]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=OrdenCompra_{item_id}_{lang_suffix}.pdf"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
