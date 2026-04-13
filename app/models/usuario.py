@@ -144,56 +144,42 @@ class User(Base):
 
     """
     def to_dict(self) -> dict:
-        permissions_by_mod = {}
         permisos_by_mod = {}
         seguridades = self.seguridades or []
         seguridades_response = []
 
+        # 1. Cargar permisos desde la base de datos
         for s in seguridades:
             modulo = (s.modulo or "").strip().upper()
             if not modulo:
                 continue
 
             id_seguridad = getattr(s, "id_seguridad", 0) or 0
-
-            permissions_by_mod[modulo] = {
-                "id_seguridad": id_seguridad,
-                "create": True,
-                "read": True,
-                "update": True,
-                "delete": True,
-            }
-
+            
+            # Formatos de mapa para compatibilidad
             permisos_by_mod[modulo] = {
                 "id_seguridad": id_seguridad,
-                "crear": True,
-                "ver": True,
-                "editar": True,
-                "eliminar": True,
+                "crear": bool(s.crear),
+                "ver": bool(s.ver),
+                "editar": bool(s.editar),
+                "eliminar": bool(s.eliminar),
             }
 
-            seguridad_data = s.to_dict()
-            seguridad_data["crear"] = True
-            seguridad_data["ver"] = True
-            seguridad_data["editar"] = True
-            seguridad_data["eliminar"] = True
-            seguridades_response.append(seguridad_data)
+            # Formato de lista (seguridades)
+            seguridades_response.append(s.to_dict())
 
+        # 2. Agregar módulos de acceso abierto SOLO si no están ya definidos
+        # y opcionalmente podemos decidir si son 100% abiertos o no.
+        # Por ahora los dejamos abiertos pero sin sobreescribir lo que venga de la BD
         for modulo in OPEN_ACCESS_MODULES:
-            permissions_by_mod[modulo] = {
-                "id_seguridad": permissions_by_mod.get(modulo, {}).get("id_seguridad", 0),
-                "create": True,
-                "read": True,
-                "update": True,
-                "delete": True,
-            }
-            permisos_by_mod[modulo] = {
-                "id_seguridad": permisos_by_mod.get(modulo, {}).get("id_seguridad", 0),
-                "crear": True,
-                "ver": True,
-                "editar": True,
-                "eliminar": True,
-            }
+            if modulo not in permisos_by_mod:
+                permisos_by_mod[modulo] = {
+                    "id_seguridad": 0,
+                    "crear": True,
+                    "ver": True,
+                    "editar": True,
+                    "eliminar": True,
+                }
 
         return {
             "id_usuario": self.id_usuario,
@@ -204,13 +190,7 @@ class User(Base):
             "telefono": self.telefono,
             "url_firma": self.url_firma,
             "activo": bool(self.activo),
-
-            # legacy (lista)
             "seguridades": seguridades_response,
-
-            # compatibilidad (mapa)
+            "permissions": permisos_by_mod, # Usamos el mismo mapa para ambos
             "permisos": permisos_by_mod,
-
-            # nuevo (mapa)
-            "permissions": permissions_by_mod,
         }
