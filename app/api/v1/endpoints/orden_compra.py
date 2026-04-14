@@ -72,14 +72,8 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     db.add(obj)
     db.flush()
 
-<<<<<<< HEAD
-    # Validar productos y volumen solo cuando la OC se asocia a una proforma sin vinculación.
-    # Si viene vinculado (asignación a proforma/OE), los productos y volumen pueden diferir.
-    if payload.id_proforma and not payload.vinculado:
-=======
     # Validar que el volumen total no supere el volumen pendiente de la proforma.
     if payload.id_proforma and payload.vinculado != 1:
->>>>>>> bd3d2668253c386bd9e11b58b9f677eed7885ebb
         productos_proforma = {
             product_id
             for (product_id,) in (
