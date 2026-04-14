@@ -73,7 +73,7 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     db.flush()
 
     # Validar que el volumen total no supere el volumen pendiente de la proforma.
-    if payload.id_proforma:
+    if payload.id_proforma and payload.vinculado != 1:
         productos_proforma = {
             product_id
             for (product_id,) in (
@@ -115,7 +115,10 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
         ).join(
             OrdenCompra,
             DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
-        ).filter(OrdenCompra.id_proforma == payload.id_proforma).scalar()
+        ).filter(
+            OrdenCompra.id_proforma == payload.id_proforma,
+            func.coalesce(OrdenCompra.vinculado, 0) != 1
+        ).scalar()
 
         pendiente = _to_decimal(volumen_proforma_total) - _to_decimal(volumen_odc_total)
         if volumen_payload > pendiente:
