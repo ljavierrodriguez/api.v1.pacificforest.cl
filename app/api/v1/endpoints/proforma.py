@@ -290,7 +290,7 @@ def get_proforma_pdf_spanish(item_id: int, db: Session = Depends(get_db)):
         return StreamingResponse(
             iter([pdf_buffer.getvalue()]),
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=Proforma_{item_id}_ES.pdf"}
+            headers={"Content-Disposition": f"inline; filename=Proforma_{item_id}_ES.pdf"}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
@@ -311,7 +311,7 @@ def get_proforma_pdf_english(item_id: int, db: Session = Depends(get_db)):
         return StreamingResponse(
             iter([pdf_buffer.getvalue()]),
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=Proforma_{item_id}_EN.pdf"}
+            headers={"Content-Disposition": f"inline; filename=Proforma_{item_id}_EN.pdf"}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
@@ -335,7 +335,7 @@ def get_proforma_pdf_both(item_id: int, language: str = Query('es', description=
         return StreamingResponse(
             iter([pdf_buffer.getvalue()]),
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=Proforma_{item_id}_{lang_suffix}.pdf"}
+            headers={"Content-Disposition": f"inline; filename=Proforma_{item_id}_{lang_suffix}.pdf"}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
