@@ -72,9 +72,14 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     db.add(obj)
     db.flush()
 
+<<<<<<< HEAD
     # Validar productos y volumen solo cuando la OC se asocia a una proforma sin vinculación.
     # Si viene vinculado (asignación a proforma/OE), los productos y volumen pueden diferir.
     if payload.id_proforma and not payload.vinculado:
+=======
+    # Validar que el volumen total no supere el volumen pendiente de la proforma.
+    if payload.id_proforma and payload.vinculado != 1:
+>>>>>>> bd3d2668253c386bd9e11b58b9f677eed7885ebb
         productos_proforma = {
             product_id
             for (product_id,) in (
@@ -116,7 +121,10 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
         ).join(
             OrdenCompra,
             DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
-        ).filter(OrdenCompra.id_proforma == payload.id_proforma).scalar()
+        ).filter(
+            OrdenCompra.id_proforma == payload.id_proforma,
+            func.coalesce(OrdenCompra.vinculado, 0) != 1
+        ).scalar()
 
         pendiente = _to_decimal(volumen_proforma_total) - _to_decimal(volumen_odc_total)
         if volumen_payload > pendiente:

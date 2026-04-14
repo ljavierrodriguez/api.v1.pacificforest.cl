@@ -97,11 +97,20 @@ def list_proforma(
         func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, 0)).label("vol_oc")
     ).group_by(DetalleOrdenCompra.id_orden_compra).subquery()
 
+    from sqlalchemy import case
+
     # Subconsulta para volumen asignado y conteo de OCs por Proforma
+    # cnt_oc: cuenta TODAS las asociadas (normales o vinculadas)
+    # vol_asig: suma SOLO las normales (vinculado IS NULL o != 1)
     oc_summary_sub = db.query(
         OrdenCompra.id_proforma,
         func.count(OrdenCompra.id_orden_compra).label("cnt_oc"),
-        func.sum(func.coalesce(volumen_per_oc_sub.c.vol_oc, 0)).label("vol_asig")
+        func.sum(
+            case(
+                (func.coalesce(OrdenCompra.vinculado, 0) != 1, func.coalesce(volumen_per_oc_sub.c.vol_oc, 0)),
+                else_=0
+            )
+        ).label("vol_asig")
     ).outerjoin(volumen_per_oc_sub, OrdenCompra.id_orden_compra == volumen_per_oc_sub.c.id_orden_compra)\
      .group_by(OrdenCompra.id_proforma).subquery()
 
