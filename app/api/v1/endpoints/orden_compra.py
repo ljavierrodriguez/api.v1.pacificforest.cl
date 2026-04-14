@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
-from typing import List
+from typing import List, Optional
 from decimal import Decimal, InvalidOperation
 
 from app.db.session import get_db
@@ -153,12 +153,18 @@ from app.models.operacion_exportacion import OperacionExportacion
 def list_orden_compra(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100)
+    page_size: int = Query(10, ge=1, le=100),
+    id_proforma: Optional[int] = Query(None, description="Filtrar por ID de proforma")
 ):
     skip = (page - 1) * page_size
     
+    # Construir filtro base
+    base_query = db.query(OrdenCompra)
+    if id_proforma is not None:
+        base_query = base_query.filter(OrdenCompra.id_proforma == id_proforma)
+
     # Obtener total de elementos
-    total_items = db.query(OrdenCompra).count()
+    total_items = base_query.count()
     
     # Subconsulta para volumen total por OC
     volumen_sub = db.query(
@@ -185,8 +191,12 @@ def list_orden_compra(
      .outerjoin(Empresa, OrdenCompra.id_empresa == Empresa.id_empresa)\
      .outerjoin(EstadoOdc, OrdenCompra.id_estado_odc == EstadoOdc.id_estado_odc)\
      .outerjoin(Proforma, OrdenCompra.id_proforma == Proforma.id_proforma)\
-     .outerjoin(OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion)\
-     .order_by(desc(OrdenCompra.fecha_emision), desc(OrdenCompra.id_orden_compra))\
+     .outerjoin(OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion)
+
+    if id_proforma is not None:
+        query = query.filter(OrdenCompra.id_proforma == id_proforma)
+
+    query = query.order_by(desc(OrdenCompra.fecha_emision), desc(OrdenCompra.id_orden_compra))\
      .offset(skip).limit(page_size)
 
     results = query.all()
