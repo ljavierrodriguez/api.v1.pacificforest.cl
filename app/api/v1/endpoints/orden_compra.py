@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List, Optional
 from decimal import Decimal, InvalidOperation
+import os
+import shutil
+from datetime import datetime
 
 from app.db.session import get_db
 from app.models.detalle_orden_compra import DetalleOrdenCompra
@@ -281,6 +284,48 @@ def delete_orden_compra(item_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al eliminar la orden de compra: {str(e)}")
+
+
+@router.post("/{item_id}/imagen", summary='Subir imagen de la orden de compra', description='Sube una imagen para asociarla a la orden de compra.')
+def upload_imagen_orden_compra(item_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Sube una imagen para la orden de compra y actualiza el campo url_imagen.
+    """
+    # Verificar que la orden de compra existe
+    orden_compra = db.get(OrdenCompra, item_id)
+    if not orden_compra:
+        raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
+    
+    # Validar que sea una imagen
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
+    
+    # Crear el directorio si no existe
+    static_path = os.path.join(os.getcwd(), "app", "static", "imagenes_orden_compra")
+    os.makedirs(static_path, exist_ok=True)
+    
+    # Generar nombre único para el archivo
+    file_extension = os.path.splitext(file.filename)[1]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    unique_filename = f"oc_{item_id}_{timestamp}{file_extension}"
+    file_path = os.path.join(static_path, unique_filename)
+    
+    # Guardar el archivo
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Actualizar la URL de la imagen en la base de datos
+    url_imagen = f"/static/imagenes_orden_compra/{unique_filename}"
+    orden_compra.url_imagen = url_imagen
+    db.add(orden_compra)
+    db.commit()
+    db.refresh(orden_compra)
+    
+    return {
+        "message": "Imagen subida exitosamente",
+        "url_imagen": url_imagen,
+        "filename": unique_filename
+    }
 
 
 @router.get("/{item_id}/pdf/spanish", summary='Descargar PDF Orden de Compra Español', description='Descarga la orden de compra en formato PDF en español.')
