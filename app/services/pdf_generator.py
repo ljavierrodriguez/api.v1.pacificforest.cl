@@ -15,6 +15,8 @@ from reportlab.platypus import (
     Paragraph,
     Spacer,
     PageBreak,
+    CondPageBreak,
+    KeepTogether,
     Image as RLImage,
     Flowable,
 )
@@ -1562,8 +1564,9 @@ class OrdenCompraPDFGenerator(ProformaPDFGenerator):
                 elements.append(Spacer(1, 0.12 * inch))
                 elements.append(other_specs_box)
 
-        # ===== PAGE 2: notes =====
-        elements.append(PageBreak())
+        # ===== Notes: only break if less than 2 inches remain on current page =====
+        elements.append(CondPageBreak(2 * inch))
+        elements.append(Spacer(1, 0.4 * inch))
 
         nota_box = self._note_box(
             self.t("NOTE_ODC"), getattr(orden_compra, "nota_1", None)
@@ -1572,17 +1575,18 @@ class OrdenCompraPDFGenerator(ProformaPDFGenerator):
             elements.append(nota_box)
             elements.append(Spacer(1, 0.15 * inch))
 
-        # ===== Signature: same page as notes if space allows =====
-        elements.append(Spacer(1, 0.5 * inch))
-        elements.append(self._odc_signature(orden_compra))
-
-        # ===== PAGE 4 (optional): image =====
+        # ===== Image (optional): before signature, break only if needed =====
         if getattr(orden_compra, "url_imagen", None):
             img = self._image_page(orden_compra.url_imagen)
             if img:
-                elements.append(PageBreak())
-                elements.append(Spacer(1, 0.5 * inch))
+                elements.append(CondPageBreak(3 * inch))
+                elements.append(Spacer(1, 0.3 * inch))
                 elements.append(img)
+
+        # ===== Signature: keep together with a minimum space check =====
+        elements.append(CondPageBreak(2 * inch))
+        elements.append(Spacer(1, 0.5 * inch))
+        elements.append(self._odc_signature(orden_compra))
 
         def on_page(canv, d):
             self._draw_odc_page_header(canv, d, orden_compra)
