@@ -144,6 +144,19 @@ class UserUpdate(BaseModel):
     )
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr = Field(..., description="Correo del usuario")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "email": "johndoe@example.com"
+                }
+            ]
+        }
+    )
+
 class PasswordResetConfirm(BaseModel):
     token: str = Field(..., description="Token de restablecimiento")
     new_password: str = Field(..., description="Nueva contraseña")

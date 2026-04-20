@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Form,  BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session, joinedload
 from datetime import timedelta
-from app.schemas.user import UserCreate, UserRead, Token, TokenWithUser
+from app.schemas.user import UserCreate, UserRead, Token, TokenWithUser, PasswordResetRequest
 from app.schemas.pagination import create_paginated_response
 from app.models.usuario import User
 from app.db.session import get_db
 from app.core.config import settings
-from app.core.security import create_access_token, authenticate_user, get_current_user
+from app.core.security import create_access_token, authenticate_user, get_current_user, create_password_reset_token
+from app.services.email import send_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -145,3 +146,38 @@ def read_users_me(current_user: User = Depends(get_current_user), db: Session = 
     # Cargar las seguridades del usuario
     user = db.query(User).options(joinedload(User.seguridades)).filter(User.id_usuario == current_user.id_usuario).first()
     return user.to_dict()
+
+@router.post(
+    "/reset-password",
+    summary="Restablecer contraseña",
+    description="Envía un link de restablecimiento al correo del usuario.",
+)
+def reset_usuario_password(
+    request: PasswordResetRequest,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+):
+    item = db.query(User).filter(User.correo == request.email).first()
+
+    # ⚠️ Importante: no revelar si el usuario existe o no
+    if not item:
+        return {"ok": True}
+
+    token = create_password_reset_token(item.id_usuario)
+    separator = "&" if "?" in settings.PASSWORD_RESET_URL else "?"
+    reset_url = f"{settings.PASSWORD_RESET_URL}{separator}token={token}"
+
+    subject = "Restablecer contraseña"
+    body = (
+        f"Hola {item.nombre},\n\n"
+        "Se solicitó un restablecimiento de contraseña.\n"
+        f"Puedes crear una nueva contraseña en el siguiente link:\n{reset_url}\n\n"
+        "Si no solicitaste este cambio, ignora este correo.\n"
+    )
+
+    if background_tasks:
+        background_tasks.add_task(send_email, item.correo, subject, body)
+    else:
+        send_email(item.correo, subject, body)
+
+    return {"ok": True}
