@@ -34,6 +34,70 @@ from app.models.contacto_orden_compra import ContactoOrdenCompra
 from app.models.contacto import Contacto
 
 
+# ---------------- Signature block (reusable) ----------------
+class SignatureBlock(Flowable):
+    """
+    Dibuja centrado: imagen de firma (opcional) + línea + nombre + teléfono.
+    Usa el canvas directamente para garantizar centrado y padding exacto.
+    """
+    LINE_W   = 2.8 * inch
+    IMG_W    = 2.8 * inch
+    IMG_H    = 1.0 * inch
+    GAP_SIGN = 0.75 * inch   # espacio vacío cuando no hay imagen
+    FONT     = "Helvetica"
+    FONT_SZ  = 8
+
+    def __init__(self, img_path=None, nombre="-", telefono="-"):
+        super().__init__()
+        self.img_path  = img_path
+        self.nombre    = nombre
+        self.telefono  = telefono
+        self._avail_w  = 0
+
+    def wrap(self, availWidth, availHeight):
+        self._avail_w = availWidth
+        # altura: imagen-o-espacio + línea(0) + gap-nombre + nombre + gap-tel + tel
+        img_part = self.IMG_H if self.img_path else self.GAP_SIGN
+        self._height = img_part + 4 + 14 + 12
+        return availWidth, self._height
+
+    def draw(self):
+        c   = self.canv
+        cx  = self._avail_w / 2.0
+        y   = self._height
+
+        # --- imagen de firma ---
+        if self.img_path:
+            y -= self.IMG_H
+            try:
+                ir = ImageReader(self.img_path)
+                iw, ih = ir.getSize()
+                scale  = min(self.IMG_W / iw, self.IMG_H / ih)
+                dw, dh = iw * scale, ih * scale
+                # dibujar con la base exactamente en y (sin margen inferior)
+                c.drawImage(ir, cx - dw / 2.0, y, width=dw, height=dh,
+                            mask='auto')
+            except Exception:
+                pass
+        else:
+            y -= self.GAP_SIGN
+
+        # --- línea pegada bajo la imagen ---
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(0.5)
+        c.line(cx - self.LINE_W / 2.0, y, cx + self.LINE_W / 2.0, y)
+
+        # --- nombre ---
+        y -= 12
+        c.setFont(self.FONT, self.FONT_SZ)
+        c.drawCentredString(cx, y, self.nombre)
+
+        # --- teléfono ---
+        y -= 12
+        c.setFont(self.FONT, self.FONT_SZ)
+        c.drawCentredString(cx, y, self.telefono)
+
+
 # ---------------- Rounded container (reusable) ----------------
 class RoundedContainer(Flowable):
     """
@@ -728,78 +792,29 @@ class ProformaPDFGenerator:
         )
 
     def _signatures(self, proforma: Proforma):
-        # Altura de espacio antes de la línea de firma
-        sign_gap = 0.75 * inch
-
-        left = Table(
-            [
-                [Paragraph(self.t("BUYER"), self.styles["SmallBold"])],
-                [Spacer(1, sign_gap)],
-                [Paragraph("______________________________", self.styles["Small"])],
-                [Paragraph(self.t("AUTHORIZED_BY"), self.styles["Small"])],
-            ],
-            colWidths=[3.4 * inch],
-        )
-
         usuario_nombre = "-"
         usuario_telefono = "-"
-        firma_img = None
-        
+        firma_path = None
+
         if getattr(proforma, "UsuarioEncargado", None):
             nombre_raw = getattr(proforma.UsuarioEncargado, "nombre", None) or "-"
             usuario_nombre = nombre_raw.title() if nombre_raw != "-" else "-"
             usuario_telefono = getattr(proforma.UsuarioEncargado, "telefono", None) or "-"
             url_firma = getattr(proforma.UsuarioEncargado, "url_firma", None)
-            
-            # Cargar imagen de firma si existe
+
             if url_firma:
-                # Convertir la URL relativa a ruta absoluta
                 if url_firma.startswith("/static/"):
-                    firma_path = os.path.join(os.getcwd(), "app", url_firma.replace("/static/", "static/"))
+                    p = os.path.join(os.getcwd(), "app", url_firma.replace("/static/", "static/"))
                 else:
-                    firma_path = url_firma
-                
-                if os.path.exists(firma_path):
-                    try:
-                        # Crear imagen con tamaño controlado, manteniendo aspecto
-                        from reportlab.platypus import Image as RLImage
-                        firma_img = RLImage(firma_path, width=2*inch, height=0.7*inch, kind='proportional')
-                    except Exception as e:
-                        pass
+                    p = url_firma
+                if os.path.exists(p):
+                    firma_path = p
 
-        # Construir la tabla derecha con la firma sobre la línea (sin espacio entre firma y línea)
-        if firma_img:
-            # Con firma: título, espacio pequeño, firma pegada a línea, nombre, teléfono
-            right_rows = [
-                [Paragraph(self.t("SUPPLIER"), self.styles["SmallBold"])],
-                [Spacer(1, 0.05*inch)],  # Espacio mínimo
-                [firma_img],
-                [Paragraph("______________________________", self.styles["Small"])],
-                [Paragraph(usuario_nombre, self.styles["Small"])],
-                [Paragraph(usuario_telefono, self.styles["Small"])],
-            ]
-        else:
-            # Sin firma: mantener el layout original
-            right_rows = [
-                [Paragraph(self.t("SUPPLIER"), self.styles["SmallBold"])],
-                [Spacer(1, sign_gap)],
-                [Paragraph("______________________________", self.styles["Small"])],
-                [Paragraph(usuario_nombre, self.styles["Small"])],
-                [Paragraph(usuario_telefono, self.styles["Small"])],
-            ]
-
-        right = Table(right_rows, colWidths=[3.4 * inch])
-
-        t = Table([[left, right]], colWidths=[3.45 * inch, 3.45 * inch])
-        t.setStyle(
-            TableStyle(
-                [
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ]
-            )
+        return SignatureBlock(
+            img_path=firma_path,
+            nombre=usuario_nombre,
+            telefono=usuario_telefono,
         )
-        return t
 
     def _image_page(self, url_imagen: str):
         """
