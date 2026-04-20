@@ -920,24 +920,26 @@ class ProformaPDFGenerator:
                 elements.append(Spacer(1, 0.12 * inch))
                 elements.append(spec_box)
 
-        # ===== PAGE 2 =====
-        elements.append(PageBreak())
-
+        # ===== NOTAS (fluyen en la misma página si hay espacio) =====
         b0 = self._note_box(self.t("NOTE"), getattr(proforma, "nota", None))
         if b0:
+            elements.append(Spacer(1, 0.12 * inch))
+            elements.append(CondPageBreak(1.5 * inch))
             elements.append(b0)
-            elements.append(Spacer(1, 0.15 * inch))
 
         b1 = self._note_box(self.t("NOTE_1"), getattr(proforma, "nota_1", None))
         if b1:
+            elements.append(Spacer(1, 0.12 * inch))
+            elements.append(CondPageBreak(1.5 * inch))
             elements.append(b1)
-            elements.append(Spacer(1, 0.15 * inch))
 
         b2 = self._note_box(self.t("NOTE_2"), getattr(proforma, "nota_2", None))
         if b2:
+            elements.append(Spacer(1, 0.12 * inch))
+            elements.append(CondPageBreak(1.5 * inch))
             elements.append(b2)
 
-        # ===== PAGE 3 =====
+        # ===== FIRMAS (siempre en su propia página) =====
         elements.append(PageBreak())
         elements.append(Spacer(1, 0.7 * inch))
         elements.append(self._signatures(proforma))

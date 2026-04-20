@@ -32,6 +32,11 @@ class DetalleProforma(Base):
     volumen_eq = Column(String(12), nullable=False)
     precio_eq = Column(String(12), nullable=False)
 
+    producto_nombre_esp = Column(String(100))
+    producto_nombre_ing = Column(String(100))
+    producto_obs_calidad = Column(String(2000))
+    producto_especie = Column(String(100))
+
     Proforma = relationship(
         "Proforma",
         primaryjoin="foreign(DetalleProforma.id_proforma)==Proforma.id_proforma",
@@ -86,6 +91,10 @@ class DetalleProforma(Base):
             "volumen": self.volumen,
             "volumen_eq": self.volumen_eq,
             "precio_eq": self.precio_eq,
+            "producto_nombre_esp": self.producto_nombre_esp,
+            "producto_nombre_ing": self.producto_nombre_ing,
+            "producto_obs_calidad": self.producto_obs_calidad,
+            "producto_especie": self.producto_especie,
         }
         return result
 
