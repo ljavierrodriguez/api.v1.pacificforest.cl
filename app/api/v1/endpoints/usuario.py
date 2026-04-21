@@ -64,7 +64,7 @@ def _extract_seguridades_from_payload(payload: Any) -> List[Dict[str, Any]]:
 
 @router.post(
     "/",
-    response_model=UserRead,
+    response_model=UserCreate,
     summary='Crear usuario',
     description='Crear un nuevo usuario.',
 )
