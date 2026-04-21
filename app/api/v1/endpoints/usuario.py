@@ -91,6 +91,7 @@ def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
     user.set_password(payload.password)
     db.add(user)
     db.flush()
+    db.refresh(user)
 
     for seguridad_data in _extract_seguridades_from_payload(payload):
         db.add(Seguridad(id_usuario=user.id_usuario, **seguridad_data))
