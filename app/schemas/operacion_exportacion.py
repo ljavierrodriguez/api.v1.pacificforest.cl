@@ -37,7 +37,17 @@ class OperacionExportacionRead(BaseModel):
     id_forma_pago: int = Field(..., description="ID de la forma de pago")
     id_estado_oe: int = Field(..., description="ID del estado de la operación")
     fecha: date = Field(..., description="Fecha de la operación")
-    
+    id_proforma: Optional[int] = Field(None, description="ID de la proforma asociada, si existe")
+
+    # Etiquetas de texto para evitar llamadas adicionales desde el frontend
+    facturar_a_nombre: Optional[str] = Field(None, description="Razón social del cliente a facturar")
+    consignar_a_nombre: Optional[str] = Field(None, description="Razón social del cliente a consignar")
+    notificar_a_nombre: Optional[str] = Field(None, description="Razón social del cliente a notificar")
+    puerto_origen_nombre: Optional[str] = Field(None, description="Nombre del puerto de origen")
+    puerto_destino_nombre: Optional[str] = Field(None, description="Nombre del puerto de destino")
+    forma_pago_nombre: Optional[str] = Field(None, description="Nombre de la forma de pago")
+    estado_oe_nombre: Optional[str] = Field(None, description="Nombre del estado de la operación")
+
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -32,11 +32,6 @@ class DetalleProforma(Base):
     volumen_eq = Column(String(12), nullable=False)
     precio_eq = Column(String(12), nullable=False)
 
-    producto_nombre_esp = Column(String(100))
-    producto_nombre_ing = Column(String(100))
-    producto_obs_calidad = Column(String(2000))
-    producto_especie = Column(String(100))
-
     Proforma = relationship(
         "Proforma",
         primaryjoin="foreign(DetalleProforma.id_proforma)==Proforma.id_proforma",
@@ -67,6 +62,23 @@ class DetalleProforma(Base):
         primaryjoin="foreign(DetalleProforma.id_unidad_medida_largo)==UnidadMedida.id_unidad_medida",
         viewonly=True,
     )
+
+    @property
+    def producto_nombre_esp(self):
+        return getattr(self.Producto, "nombre_producto_esp", None)
+
+    @property
+    def producto_nombre_ing(self):
+        return getattr(self.Producto, "nombre_producto_ing", None)
+
+    @property
+    def producto_obs_calidad(self):
+        return getattr(self.Producto, "obs_calidad", None)
+
+    @property
+    def producto_especie(self):
+        especie = getattr(self.Producto, "especie", None)
+        return getattr(especie, "nombre_esp", None)
 
     def __repr__(self):
         return f"<DetalleProforma {self.id_detalle_proforma}>"

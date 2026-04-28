@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import func, cast, Numeric
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -94,11 +94,10 @@ def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_
     if not orden:
         raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
 
-    if orden.id_proforma and not orden.vinculado:
+    if orden.id_proforma:
         _validate_producto_vs_proforma(db, orden.id_proforma, payload.id_producto)
 
-    if orden.id_proforma and not orden.vinculado and payload.volumen_eq is not None:
-        from sqlalchemy import Numeric, cast
+    if orden.id_proforma and payload.volumen_eq is not None:
         volumen_proforma_total = db.query(
             func.coalesce(
                 func.sum(cast(DetalleProforma.volumen_eq, Numeric(12, 3))),

@@ -84,6 +84,61 @@ class ProformaRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProformaDetalleItemRead(BaseModel):
+    id_detalle_proforma: int = Field(..., description="ID del detalle de proforma")
+    id_producto: Optional[int] = Field(None, description="ID del producto")
+    especie_nombre: Optional[str] = Field(None, description="Nombre de la especie")
+    producto_nombre: Optional[str] = Field(None, description="Nombre del producto")
+    texto_libre: Optional[str] = Field(None, description="Texto libre")
+    id_unidad_venta: int = Field(..., description="ID de la unidad de venta")
+    cantidad: Decimal = Field(..., description="Cantidad")
+    espesor: Optional[str] = Field(None, description="Espesor")
+    id_unidad_medida_espesor: Optional[int] = Field(None, description="ID unidad medida espesor")
+    ancho: Optional[str] = Field(None, description="Ancho")
+    id_unidad_medida_ancho: Optional[int] = Field(None, description="ID unidad medida ancho")
+    largo: Optional[str] = Field(None, description="Largo")
+    id_unidad_medida_largo: Optional[int] = Field(None, description="ID unidad medida largo")
+    piezas: Optional[int] = Field(None, description="Piezas")
+    precio_unitario: Decimal = Field(..., description="Precio unitario")
+    subtotal: Decimal = Field(..., description="Subtotal")
+    volumen_eq: Decimal = Field(..., description="Volumen equivalente")
+    precio_eq: Decimal = Field(..., description="Precio equivalente")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProformaOrdenCompraEmbeddedRead(BaseModel):
+    id_orden_compra: int = Field(..., description="ID de la orden de compra")
+    proveedor_nombre: Optional[str] = Field(None, description="Nombre del proveedor")
+    fecha_emision: date = Field(..., description="Fecha de emision")
+    volumenTotal: Decimal = Field(..., description="Volumen total de la OC")
+    estado_nombre: Optional[str] = Field(None, description="Nombre del estado ODC")
+    id_estado_odc: int = Field(..., description="ID del estado ODC")
+    vinculado: Optional[int] = Field(None, description="Flag de vinculacion")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProformaContactoEmbeddedRead(BaseModel):
+    id_contacto: int = Field(..., description="ID del contacto")
+    nombre: str = Field(..., description="Nombre del contacto")
+    correo: Optional[str] = Field(None, description="Correo del contacto")
+    telefono: Optional[str] = Field(None, description="Telefono del contacto")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProformaDetailRead(ProformaRead):
+    consignar_a_nombre: Optional[str] = Field(None, description="Nombre del cliente a consignar")
+    notificar_a_nombre: Optional[str] = Field(None, description="Nombre del cliente a notificar")
+    puerto_origen_nombre: Optional[str] = Field(None, description="Nombre del puerto de origen")
+    puerto_destino_nombre: Optional[str] = Field(None, description="Nombre del puerto de destino")
+
+    detalles: list[ProformaDetalleItemRead] = Field(default_factory=list, description="Detalles de productos de la proforma")
+    ordenes_compra: list[ProformaOrdenCompraEmbeddedRead] = Field(default_factory=list, description="Ordenes de compra asociadas")
+    contactos: list[ProformaContactoEmbeddedRead] = Field(default_factory=list, description="Contactos asociados a la proforma")
+
+
 class ProformaUpdate(BaseModel):
     id_operacion_exportacion: Optional[int] = Field(None, description="ID de la operación de exportación")
     id_contenedor: Optional[int] = Field(None, description="ID del contenedor")

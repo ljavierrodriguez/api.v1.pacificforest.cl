@@ -114,6 +114,7 @@ class OrdenCompraRead(BaseModel):
     bodega_nombre: Optional[str] = Field(None, description="Nombre de la bodega")
     empresa_nombre: Optional[str] = Field(None, description="Nombre de la empresa")
     estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
+    oe_numero: Optional[str] = Field(None, description="Número de la OE asociada a la proforma")
 
     model_config = ConfigDict(from_attributes=True)
 
