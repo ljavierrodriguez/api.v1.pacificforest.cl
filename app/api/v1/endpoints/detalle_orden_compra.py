@@ -148,22 +148,31 @@ def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_
     return obj
 
 
-@router.get("/", summary='GET Detalle Orden Compra', description='GET Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/", summary='GET Detalle Orden Compra', description='Listar todos los detalles de orden de compra paginados.')
 def list_detalles(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
-    # Calcular offset
     skip = (page - 1) * page_size
-    
-    # Obtener total de elementos
-    total_items = db.query(DetalleOrdenCompra).count()
-    
-    # Obtener elementos de la página actual
-    items = db.query(DetalleOrdenCompra).offset(skip).limit(page_size).all()
-    
-    # Crear respuesta paginada
+    query = db.query(DetalleOrdenCompra)
+    total_items = query.count()
+    items = query.offset(skip).limit(page_size).all()
+    return create_paginated_response(items, page, page_size, total_items)
+
+
+# Nuevo endpoint para filtrar por orden de compra
+@router.get("/by-orden/{id_orden_compra}", summary='GET Detalles por Orden de Compra', description='Listar detalles de una orden de compra específica, paginados.')
+def list_detalles_by_orden(
+    id_orden_compra: int,
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db)
+):
+    skip = (page - 1) * page_size
+    query = db.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_orden_compra)
+    total_items = query.count()
+    items = query.offset(skip).limit(page_size).all()
     return create_paginated_response(items, page, page_size, total_items)
 
 

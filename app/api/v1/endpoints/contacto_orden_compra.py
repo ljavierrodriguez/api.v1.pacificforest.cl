@@ -23,22 +23,20 @@ def create_contacto(payload: ContactoOrdenCompraCreate, db: Session = Depends(ge
     return obj
 
 
-@router.get("/", summary='GET Contacto Orden Compra', description='GET Contacto Orden Compra endpoint. Replace this placeholder with a meaningful description.')
+
+@router.get("/", summary='GET Contacto Orden Compra', description='GET Contacto Orden Compra endpoint. Permite filtrar por id_orden_compra.')
 def list_contactos(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    id_orden_compra: int = Query(None, description="Filtrar por id_orden_compra"),
     db: Session = Depends(get_db)
 ):
-    # Calcular offset
     skip = (page - 1) * page_size
-    
-    # Obtener total de elementos
-    total_items = db.query(ContactoOrdenCompra).count()
-    
-    # Obtener elementos de la página actual
-    items = db.query(ContactoOrdenCompra).offset(skip).limit(page_size).all()
-    
-    # Crear respuesta paginada
+    query = db.query(ContactoOrdenCompra)
+    if id_orden_compra is not None:
+        query = query.filter(ContactoOrdenCompra.id_orden_compra == id_orden_compra)
+    total_items = query.count()
+    items = query.offset(skip).limit(page_size).all()
     return create_paginated_response(items, page, page_size, total_items)
 
 

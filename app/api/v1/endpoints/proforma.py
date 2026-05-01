@@ -129,7 +129,7 @@ def list_proforma(
         EstadoProforma.nombre.label("estado_nombre"),
         User.nombre.label("usuario_nombre"),
         CPFacturar.razon_social.label("facturar_a_nombre"),
-        OperacionExportacion.id_operacion_exportacion.label("oe_numero")
+        OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion")
     ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
      .outerjoin(oc_summary_sub, Proforma.id_proforma == oc_summary_sub.c.id_proforma)\
      .outerjoin(Empresa, Proforma.id_empresa == Empresa.id_empresa)\
@@ -175,7 +175,7 @@ def list_proforma(
             "estado_nombre": row.estado_nombre,
             "usuario_nombre": str(row.usuario_nombre) if row.usuario_nombre else None,
             "facturar_a_nombre": str(row.facturar_a_nombre) if row.facturar_a_nombre else None,
-            "oe_numero": str(row.oe_numero) if row.oe_numero else None
+            "id_operacion_exportacion": row.id_operacion_exportacion
         })
         items.append(item_dict)
     
@@ -233,7 +233,7 @@ def search_proforma(
         EstadoProforma.nombre.label("estado_nombre"),
         User.nombre.label("usuario_nombre"),
         CPFacturar.razon_social.label("facturar_a_nombre"),
-        OperacionExportacion.id_operacion_exportacion.label("oe_numero")
+        OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion")
     ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
      .outerjoin(oc_summary_sub, Proforma.id_proforma == oc_summary_sub.c.id_proforma)\
      .outerjoin(Empresa, Proforma.id_empresa == Empresa.id_empresa)\
@@ -284,7 +284,7 @@ def search_proforma(
             "estado_nombre": row.estado_nombre,
             "usuario_nombre": str(row.usuario_nombre) if row.usuario_nombre else None,
             "facturar_a_nombre": str(row.facturar_a_nombre) if row.facturar_a_nombre else None,
-            "oe_numero": str(row.oe_numero) if row.oe_numero else None
+            "id_operacion_exportacion": row.id_operacion_exportacion
         })
         items.append(item_dict)
 
@@ -434,7 +434,7 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
         "moneda_nombre": getattr(item.Moneda, "etiqueta", None) if getattr(item, "Moneda", None) else None,
         "estado_nombre": getattr(item.EstadoProforma, "nombre", None) if getattr(item, "EstadoProforma", None) else None,
         "usuario_nombre": getattr(item.UsuarioEncargado, "nombre", None) if getattr(item, "UsuarioEncargado", None) else None,
-        "oe_numero": str(getattr(oe, "id_operacion_exportacion", "")) if oe else None,
+        "id_operacion_exportacion": getattr(oe, "id_operacion_exportacion", None),
         "facturar_a_nombre": (
             getattr(getattr(oe, "FacturarA", None), "razon_social", None)
             if oe else _cliente_nombre_from_direccion(item.DireccionFacturar)

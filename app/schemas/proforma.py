@@ -79,7 +79,7 @@ class ProformaRead(BaseModel):
     estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
     usuario_nombre: Optional[str] = Field(None, description="Nombre del usuario encargado")
     facturar_a_nombre: Optional[str] = Field(None, description="Nombre del cliente a facturar")
-    oe_numero: Optional[str] = Field(None, description="Número de la OE asociada")
+    id_operacion_exportacion: Optional[int] = Field(None, description="ID de la operación de exportación asociada")
 
     model_config = ConfigDict(from_attributes=True)
 

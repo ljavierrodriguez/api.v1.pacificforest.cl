@@ -184,7 +184,7 @@ def list_orden_compra(
         Bodega.nombre.label("bodega_nombre"),
         Empresa.nombre_fantasia.label("empresa_nombre"),
         EstadoOdc.nombre.label("estado_nombre"),
-        OperacionExportacion.id_operacion_exportacion.label("oe_numero")
+        OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion")
     ).outerjoin(volumen_sub, OrdenCompra.id_orden_compra == volumen_sub.c.id_orden_compra)\
      .outerjoin(ClienteProveedor, OrdenCompra.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)\
      .outerjoin(User, OrdenCompra.id_usuario_encargado == User.id_usuario)\
@@ -215,7 +215,7 @@ def list_orden_compra(
             "bodega_nombre": row.bodega_nombre,
             "empresa_nombre": row.empresa_nombre,
             "estado_nombre": row.estado_nombre,
-            "oe_numero": str(row.oe_numero) if row.oe_numero else None
+            "id_operacion_exportacion": row.id_operacion_exportacion
         })
         items.append(item_dict)
     
@@ -251,7 +251,7 @@ def search_orden_compra(
         Bodega.nombre.label("bodega_nombre"),
         Empresa.nombre_fantasia.label("empresa_nombre"),
         EstadoOdc.nombre.label("estado_nombre"),
-        OperacionExportacion.id_operacion_exportacion.label("oe_numero")
+        OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion")
     ).outerjoin(volumen_sub, OrdenCompra.id_orden_compra == volumen_sub.c.id_orden_compra)\
      .outerjoin(ClienteProveedor, OrdenCompra.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)\
      .outerjoin(User, OrdenCompra.id_usuario_encargado == User.id_usuario)\
@@ -291,7 +291,7 @@ def search_orden_compra(
             "bodega_nombre": row.bodega_nombre,
             "empresa_nombre": row.empresa_nombre,
             "estado_nombre": row.estado_nombre,
-            "oe_numero": str(row.oe_numero) if row.oe_numero else None,
+            "id_operacion_exportacion": row.id_operacion_exportacion,
         })
         items.append(item_dict)
 
@@ -303,7 +303,120 @@ def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="OrdenCompra not found")
-    return item
+
+    # Serializar la orden de compra
+    oc_dict = item.serialize() if hasattr(item, 'serialize') else dict(item.__dict__)
+
+    # Agregar etiquetas si existen
+    proveedor = getattr(item, "ClienteProveedor", None)
+    usuario = getattr(item, "UsuarioEncargado", None)
+    moneda = getattr(item, "Moneda", None)
+    bodega = getattr(item, "Bodega", None)
+    empresa = getattr(item, "Empresa", None)
+    estado = getattr(item, "EstadoOdc", None)
+    proforma = getattr(item, "Proforma", None)
+
+    oc_dict["proveedor_nombre"] = getattr(proveedor, "razon_social", None)
+    oc_dict["usuario_nombre"] = getattr(usuario, "nombre", None)
+    oc_dict["moneda_nombre"] = getattr(moneda, "etiqueta", None)
+    oc_dict["bodega_nombre"] = getattr(bodega, "nombre", None)
+    oc_dict["empresa_nombre"] = getattr(empresa, "nombre_fantasia", None)
+    oc_dict["estado_nombre"] = getattr(estado, "nombre", None)
+
+    # Embebido: proveedor (objeto completo)
+    proveedor_obj = None
+    if proveedor:
+        if hasattr(proveedor, "to_dict"):
+            proveedor_obj = proveedor.to_dict()
+        else:
+            proveedor_obj = dict(proveedor.__dict__)
+    oc_dict["proveedor"] = proveedor_obj
+
+    # Embebido: direccion_proveedor (objeto completo)
+    direccion_obj = None
+    direccion = getattr(item, "DireccionProveedor", None)
+    if direccion:
+        if hasattr(direccion, "to_dict"):
+            direccion_obj = direccion.to_dict()
+        else:
+            direccion_obj = dict(direccion.__dict__)
+    oc_dict["direccion_proveedor"] = direccion_obj
+
+
+    # Embebido: proforma
+    id_operacion_exportacion = None
+    if proforma:
+        proforma_dict = proforma.serialize() if hasattr(proforma, 'serialize') else dict(proforma.__dict__)
+
+        # Embebido: detalles de proforma
+        detalles = []
+        if hasattr(proforma, 'DetalleProforma') and proforma.DetalleProforma is not None:
+            for det in proforma.DetalleProforma:
+                if hasattr(det, 'to_dict'):
+                    detalles.append(det.to_dict())
+                else:
+                    detalles.append(dict(det.__dict__))
+        proforma_dict["detalles"] = detalles
+
+        # Embebido: contactos de proforma
+        contactos = []
+        if hasattr(proforma, 'ContactosProforma') and proforma.ContactosProforma is not None:
+            for cp in proforma.ContactosProforma:
+                contacto = getattr(cp, 'Contacto', None)
+                if contacto:
+                    if hasattr(contacto, 'to_dict'):
+                        contactos.append(contacto.to_dict())
+                    else:
+                        contactos.append(dict(contacto.__dict__))
+        proforma_dict["contactos"] = contactos
+
+        # Embebido: operacion_exportacion
+        oe = getattr(proforma, "OperacionExportacion", None)
+        if oe:
+            oe_dict = oe.to_dict() if hasattr(oe, 'to_dict') else dict(oe.__dict__)
+            # Etiquetas comunes
+            oe_dict["puerto_origen_nombre"] = getattr(getattr(oe, "PuertoOrigen", None), "nombre", None)
+            oe_dict["puerto_destino_nombre"] = getattr(getattr(oe, "PuertoDestino", None), "nombre", None)
+            proforma_dict["operacion_exportacion"] = oe_dict
+            # Asignar id_operacion_exportacion principal
+            id_operacion_exportacion = getattr(oe, "id_operacion_exportacion", None)
+        else:
+            proforma_dict["operacion_exportacion"] = None
+
+        oc_dict["proforma"] = proforma_dict
+    else:
+        oc_dict["proforma"] = None
+    # Incluir id_operacion_exportacion principal
+    oc_dict["id_operacion_exportacion"] = id_operacion_exportacion
+
+    # Embebido: contactos de la orden de compra
+    contactos_orden = []
+    if hasattr(item, 'ContactosOrdenCompra') and item.ContactosOrdenCompra is not None:
+        contactos_query = item.ContactosOrdenCompra
+        contactos_list = contactos_query.all() if hasattr(contactos_query, 'all') else contactos_query
+        for c in contactos_list:
+            contacto = getattr(c, 'Contacto', None)
+            if contacto:
+                if hasattr(contacto, 'to_dict'):
+                    contactos_orden.append(contacto.to_dict())
+                else:
+                    contactos_orden.append(dict(contacto.__dict__))
+    # Siempre incluir el campo aunque esté vacío
+    oc_dict["contactos_orden_compra"] = contactos_orden
+
+    # Embebido: detalles/productos de la orden de compra
+    detalles_orden = []
+    if hasattr(item, 'DetalleOrdenCompra') and item.DetalleOrdenCompra is not None:
+        detalles_query = item.DetalleOrdenCompra
+        detalles_list = detalles_query.all() if hasattr(detalles_query, 'all') else detalles_query
+        for d in detalles_list:
+            if hasattr(d, 'to_dict'):
+                detalles_orden.append(d.to_dict())
+            else:
+                detalles_orden.append(dict(d.__dict__))
+    oc_dict["detalles_orden_compra"] = detalles_orden
+
+    return oc_dict
 
 
 @router.put("/{item_id}", response_model=OrdenCompraRead, summary='PUT OrdenCompra', description='Actualizar una orden de compra existente.')
