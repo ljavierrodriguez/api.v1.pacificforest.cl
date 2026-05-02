@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.db.session import get_db
 from app.models.contacto_orden_compra import ContactoOrdenCompra
@@ -28,7 +28,7 @@ def create_contacto(payload: ContactoOrdenCompraCreate, db: Session = Depends(ge
 def list_contactos(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
-    id_orden_compra: int = Query(None, description="Filtrar por id_orden_compra"),
+    id_orden_compra: Optional[int] = Query(None, description="Filtrar por id_orden_compra"),
     db: Session = Depends(get_db)
 ):
     skip = (page - 1) * page_size
@@ -38,6 +38,19 @@ def list_contactos(
     total_items = query.count()
     items = query.offset(skip).limit(page_size).all()
     return create_paginated_response(items, page, page_size, total_items)
+
+
+@router.get(
+    "/by-orden/{id_orden_compra}",
+    response_model=List[ContactoOrdenCompraRead],
+    summary='GET Contactos por Orden de Compra',
+    description='Obtiene los contactos asociados a una orden de compra. Si no existen, responde arreglo vacío.'
+)
+def list_contactos_by_orden(id_orden_compra: int, db: Session = Depends(get_db)):
+    items = db.query(ContactoOrdenCompra).filter(
+        ContactoOrdenCompra.id_orden_compra == id_orden_compra
+    ).all()
+    return items
 
 
 @router.get("/{item_id}", response_model=ContactoOrdenCompraRead, summary='GET Contacto Orden Compra', description='GET Contacto Orden Compra endpoint. Replace this placeholder with a meaningful description.')

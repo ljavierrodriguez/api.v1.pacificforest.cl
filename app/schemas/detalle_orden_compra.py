@@ -27,6 +27,9 @@ class DetalleOrdenCompraRead(BaseModel):
     id_detalle_odc: int = Field(..., description="Descripción de id_detalle_odc")
     id_orden_compra: int = Field(..., description="Descripción de id_orden_compra")
     id_producto: Optional[int] = None
+    producto_nombre: Optional[str] = Field(None, description="Nombre del producto")
+    id_especie: Optional[int] = Field(None, description="ID de la especie del producto")
+    especie_nombre: Optional[str] = Field(None, description="Nombre de la especie del producto")
     id_unidad_venta: Optional[int] = None
     texto_abierto: Optional[str] = None
     cantidad: Optional[float] = None

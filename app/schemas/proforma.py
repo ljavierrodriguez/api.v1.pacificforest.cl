@@ -133,6 +133,10 @@ class ProformaDetailRead(ProformaRead):
     notificar_a_nombre: Optional[str] = Field(None, description="Nombre del cliente a notificar")
     puerto_origen_nombre: Optional[str] = Field(None, description="Nombre del puerto de origen")
     puerto_destino_nombre: Optional[str] = Field(None, description="Nombre del puerto de destino")
+    forma_pago_nombre: Optional[str] = Field(None, description="Nombre de la forma de pago")
+    agente_nombre: Optional[str] = Field(None, description="Nombre del agente")
+    tipo_comision_nombre: Optional[str] = Field(None, description="Nombre del tipo de comisión")
+    clausula_venta_nombre: Optional[str] = Field(None, description="Cláusula de venta (FOB, CIF, etc.)")
 
     detalles: list[ProformaDetalleItemRead] = Field(default_factory=list, description="Detalles de productos de la proforma")
     ordenes_compra: list[ProformaOrdenCompraEmbeddedRead] = Field(default_factory=list, description="Ordenes de compra asociadas")

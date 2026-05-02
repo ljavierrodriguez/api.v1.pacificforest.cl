@@ -201,10 +201,11 @@ def search_operacion(
 
 @router.get("/{item_id}", response_model=OperacionExportacionRead, summary='GET Operacion Exportacion', description='Obtener una operación de exportación específica por ID.')
 def get_operacion(item_id: int, db: Session = Depends(get_db)):
-    item = db.get(OperacionExportacion, item_id)
-    if not item:
+    base_query, *_ = _build_oe_query(db)
+    row = base_query.filter(OperacionExportacion.id_operacion_exportacion == item_id).first()
+    if not row:
         raise HTTPException(status_code=404, detail="OperacionExportacion not found")
-    return item
+    return _rows_to_items([row])[0]
 
 
 @router.put("/{item_id}", response_model=OperacionExportacionRead, summary='PUT Operacion Exportacion', description='Actualizar una operación de exportación existente.')

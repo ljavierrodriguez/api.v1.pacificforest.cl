@@ -6,7 +6,9 @@ from typing import List
 from app.db.session import get_db
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.detalle_proforma import DetalleProforma
+from app.models.especie import Especie
 from app.models.orden_compra import OrdenCompra
+from app.models.producto import Producto
 from app.models.proforma import Proforma
 from app.schemas.detalle_orden_compra import (
 DetalleOrdenCompraCreate,
@@ -170,9 +172,34 @@ def list_detalles_by_orden(
     db: Session = Depends(get_db)
 ):
     skip = (page - 1) * page_size
-    query = db.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_orden_compra)
-    total_items = query.count()
-    items = query.offset(skip).limit(page_size).all()
+    base_query = db.query(DetalleOrdenCompra).filter(
+        DetalleOrdenCompra.id_orden_compra == id_orden_compra
+    )
+    total_items = base_query.count()
+
+    rows = db.query(
+        DetalleOrdenCompra,
+        Producto.nombre_producto_esp.label("producto_nombre"),
+        Producto.id_especie.label("id_especie"),
+        Especie.nombre_esp.label("especie_nombre"),
+    ).outerjoin(
+        Producto,
+        DetalleOrdenCompra.id_producto == Producto.id_producto,
+    ).outerjoin(
+        Especie,
+        Producto.id_especie == Especie.id_especie,
+    ).filter(
+        DetalleOrdenCompra.id_orden_compra == id_orden_compra
+    ).offset(skip).limit(page_size).all()
+
+    items = []
+    for detalle, producto_nombre, id_especie, especie_nombre in rows:
+        item_dict = detalle.to_dict() if hasattr(detalle, "to_dict") else dict(detalle.__dict__)
+        item_dict["producto_nombre"] = producto_nombre
+        item_dict["id_especie"] = id_especie
+        item_dict["especie_nombre"] = especie_nombre
+        items.append(item_dict)
+
     return create_paginated_response(items, page, page_size, total_items)
 
 
