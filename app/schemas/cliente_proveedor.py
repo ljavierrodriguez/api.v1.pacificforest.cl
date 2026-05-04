@@ -1,6 +1,11 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 
+from app.schemas.ciudad import CiudadRead
+from app.schemas.contacto import ContactoRead
+from app.schemas.direccion import DireccionRead
+from app.schemas.pais import PaisRead
+
 
 class ClienteProveedorCreate(BaseModel):
     rut: Optional[str] = None
@@ -35,6 +40,25 @@ class ClienteProveedorRead(BaseModel):
     giro: Optional[str] = None
     es_cliente: bool = Field(..., description="Descripción de es_cliente")
     es_proveedor: bool = Field(..., description="Descripción de es_proveedor")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CiudadDetalleRead(CiudadRead):
+    Pais: Optional[PaisRead] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DireccionDetalleRead(DireccionRead):
+    Ciudad: Optional[CiudadDetalleRead] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClienteProveedorDetailRead(ClienteProveedorRead):
+    Contactos: list[ContactoRead] = Field(default_factory=list)
+    Direcciones: list[DireccionDetalleRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

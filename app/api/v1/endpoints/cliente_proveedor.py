@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from app.db.session import get_db
+from app.models.ciudad import Ciudad
 from app.models.cliente_proveedor import ClienteProveedor
+from app.models.contacto import Contacto
+from app.models.direccion import Direccion
 from app.schemas.cliente_proveedor import (
     ClienteProveedorCreate,
+    ClienteProveedorDetailRead,
     ClienteProveedorRead,
     ClienteProveedorUpdate,
 )
@@ -49,8 +53,14 @@ def list_cliente_proveedor(
     # Obtener total de elementos
     total_items = db.query(ClienteProveedor).count()
     
-    # Obtener elementos de la página actual
-    items = db.query(ClienteProveedor).offset(skip).limit(page_size).all()
+    # Obtener elementos de la página actual ordenados alfabéticamente
+    items = (
+        db.query(ClienteProveedor)
+        .order_by(ClienteProveedor.razon_social.asc(), ClienteProveedor.nombre_fantasia.asc())
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
     
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)
@@ -79,19 +89,44 @@ def search_cliente_proveedor(
     # Obtener total de elementos filtrados
     total_items = query.count()
 
-    # Obtener elementos de la página actual
-    items = query.offset(skip).limit(page_size).all()
+    # Obtener elementos de la página actual ordenados alfabéticamente
+    items = (
+        query
+        .order_by(ClienteProveedor.razon_social.asc(), ClienteProveedor.nombre_fantasia.asc())
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
 
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)
 
 
-@router.get("/{item_id}", response_model=ClienteProveedorRead, summary='GET Cliente Proveedor', description='GET Cliente Proveedor endpoint. Replace this placeholder with a meaningful description.')
+@router.get("/{item_id}", response_model=ClienteProveedorDetailRead, summary='GET Cliente Proveedor', description='GET Cliente Proveedor endpoint. Replace this placeholder with a meaningful description.')
 def get_cliente_proveedor(item_id: int, db: Session = Depends(get_db)):
     item = db.get(ClienteProveedor, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="ClienteProveedor not found")
-    return item
+
+    contactos = (
+        db.query(Contacto)
+        .filter(Contacto.id_cliente_proveedor == item_id)
+        .order_by(Contacto.nombre.asc())
+        .all()
+    )
+    direcciones = (
+        db.query(Direccion)
+        .options(joinedload(Direccion.Ciudad).joinedload(Ciudad.Pais))
+        .filter(Direccion.id_cliente_proveedor == item_id)
+        .order_by(Direccion.por_defecto.desc(), Direccion.direccion.asc())
+        .all()
+    )
+
+    return {
+        **ClienteProveedorRead.model_validate(item).model_dump(),
+        "Contactos": contactos,
+        "Direcciones": direcciones,
+    }
 
 
 @router.put("/{item_id}", response_model=ClienteProveedorRead, summary='PUT Cliente Proveedor', description='PUT Cliente Proveedor endpoint. Replace this placeholder with a meaningful description.')
