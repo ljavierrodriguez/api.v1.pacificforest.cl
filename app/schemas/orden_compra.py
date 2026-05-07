@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from typing import Optional, List, Any
 from datetime import date
 from decimal import Decimal
 
@@ -115,6 +115,7 @@ class OrdenCompraRead(BaseModel):
     empresa_nombre: Optional[str] = Field(None, description="Nombre de la empresa")
     estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
     id_operacion_exportacion: Optional[int] = Field(None, description="ID de la operación de exportación asociada a la proforma")
+    contactos_orden_compra: Optional[List[Any]] = Field(None, description="Contactos asociados a la orden de compra")
 
     model_config = ConfigDict(from_attributes=True)
 

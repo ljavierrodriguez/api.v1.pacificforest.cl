@@ -31,6 +31,8 @@ from app.models.contacto_proforma import ContactoProforma
 from app.models.orden_compra import OrdenCompra
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.contacto_orden_compra import ContactoOrdenCompra
+from app.models.orden_servicio import OrdenServicio
+from app.models.detalle_orden_servicio import DetalleOrdenServicio
 from app.models.contacto import Contacto
 
 
@@ -1434,31 +1436,11 @@ class OrdenCompraPDFGenerator(ProformaPDFGenerator):
     #  Quality obs section                                                 #
     # ------------------------------------------------------------------ #
     def _quality_obs_section(self, orden_compra: OrdenCompra, db: Session):
-        details = (
-            db.query(DetalleOrdenCompra)
-            .filter(DetalleOrdenCompra.id_orden_compra == orden_compra.id_orden_compra)
-            .all()
-        )
-
-        obs_parts = []
-        seen_products = set()
-        for d in details:
-            if d.Producto and d.id_producto not in seen_products:
-                obs = d.Producto.obs_calidad
-                if obs and str(obs).strip():
-                    prod_name = (
-                        d.Producto.nombre_producto_esp
-                        if self.language == "es"
-                        else d.Producto.nombre_producto_ing
-                    ) or d.Producto.nombre_producto_esp or "-"
-                    obs_parts.append(f"<b>{prod_name}:</b> {obs.strip()}")
-                    seen_products.add(d.id_producto)
-
-        if not obs_parts:
+        observacion_txt = getattr(orden_compra, "observacion", None)
+        if not observacion_txt or not str(observacion_txt).strip():
             return None
 
-        combined = "<br/>".join(obs_parts)
-        return self._note_box(self.t("QUALITY_OBS"), combined)
+        return self._note_box(self.t("QUALITY_OBS"), str(observacion_txt).strip())
 
     # ------------------------------------------------------------------ #
     #  Signature (single: usuario encargado)                              #
@@ -1566,17 +1548,10 @@ class OrdenCompraPDFGenerator(ProformaPDFGenerator):
             elements.append(Spacer(1, 0.12 * inch))
             elements.append(qual_box)
 
-        # Other specifications on page 1 (uses remaining space)
-        spec_parts = []
-        observacion_txt = getattr(orden_compra, "observacion", None)
+        # Otras especificaciones (campo otras_especificaciones de la orden)
         otras_txt = getattr(orden_compra, "otras_especificaciones", None)
-        if observacion_txt and str(observacion_txt).strip():
-            spec_parts.append(str(observacion_txt).strip())
         if otras_txt and str(otras_txt).strip():
-            spec_parts.append(str(otras_txt).strip())
-
-        if spec_parts:
-            other_specs_box = self._note_box(self.t("OTHER_SPECS"), "\n\n".join(spec_parts))
+            other_specs_box = self._note_box(self.t("OTHER_SPECS"), str(otras_txt).strip())
             if other_specs_box:
                 elements.append(Spacer(1, 0.12 * inch))
                 elements.append(other_specs_box)
@@ -1607,6 +1582,226 @@ class OrdenCompraPDFGenerator(ProformaPDFGenerator):
 
         def on_page(canv, d):
             self._draw_odc_page_header(canv, d, orden_compra)
+
+        doc.build(
+            elements,
+            onFirstPage=on_page,
+            onLaterPages=on_page,
+            canvasmaker=NumberedCanvas,
+        )
+
+        buffer.seek(0)
+        return buffer
+
+
+class OrdenServicioPDFGenerator(OrdenCompraPDFGenerator):
+    """Genera PDFs de Orden de Servicio con el mismo diseño que Orden de Compra."""
+
+    def __init__(self, language: str = "es"):
+        super().__init__(language)
+        self.translations["es"].update({
+            "PURCHASE_ORDER": "ORDEN DE SERVICIO",
+            "NOTE_ODC": "NOTAS",
+        })
+        self.translations["en"].update({
+            "PURCHASE_ORDER": "SERVICE ORDER",
+            "NOTE_ODC": "NOTES",
+        })
+
+    def _odc_line_flowable(self, orden_servicio: OrdenServicio):
+        left = Paragraph(
+            f"<b>{self.t('PURCHASE_ORDER')}:</b> {orden_servicio.id_orden_servicio}",
+            self.styles["LineTitle"],
+        )
+        return left
+
+    def _get_odc_contactos(self, orden_servicio: OrdenServicio, db: Session):
+        # La primera version no incluye modulo de contactos para orden de servicio.
+        return None, None
+
+    def _odc_products_table(self, orden_servicio: OrdenServicio, db: Session):
+        details = (
+            db.query(DetalleOrdenServicio)
+            .filter(DetalleOrdenServicio.id_orden_servicio == orden_servicio.id_orden_servicio)
+            .all()
+        )
+
+        header = [
+            "#",
+            self.t("PRODUCT"),
+            self.t("QTY"),
+            self.t("UNIT"),
+            self.t("THICKNESS"),
+            self.t("WIDTH"),
+            self.t("LENGTH"),
+            self.t("UNIT_PRICE"),
+            self.t("TOTAL"),
+        ]
+        rows = [header]
+
+        subtotal = Decimal("0")
+
+        for i, d in enumerate(details, start=1):
+            qty = self._to_decimal(d.cantidad)
+            unit_price = self._to_decimal(d.precio_unitario)
+            line_total = qty * unit_price
+            subtotal += line_total
+
+            if d.texto_abierto:
+                producto = d.texto_abierto
+            elif d.Producto:
+                if self.language == "es":
+                    producto = d.Producto.nombre_producto_esp or d.Producto.nombre_producto_ing or "-"
+                else:
+                    producto = d.Producto.nombre_producto_ing or d.Producto.nombre_producto_esp or "-"
+            else:
+                producto = "-"
+
+            unidad = "M3"
+            if d.UnidadVenta is not None:
+                unidad = (
+                    getattr(d.UnidadVenta, "abreviatura", None)
+                    or getattr(d.UnidadVenta, "nombre", None)
+                    or getattr(d.UnidadVenta, "codigo", None)
+                    or "M3"
+                )
+
+            um_e = getattr(d.UnidadMedidaEspesor, "abreviatura", None) or getattr(d.UnidadMedidaEspesor, "nombre", None) or ""
+            um_a = getattr(d.UnidadMedidaAncho, "abreviatura", None) or getattr(d.UnidadMedidaAncho, "nombre", None) or ""
+            um_l = getattr(d.UnidadMedidaLargo, "abreviatura", None) or getattr(d.UnidadMedidaLargo, "nombre", None) or ""
+
+            espesor = f"{d.espesor} {um_e}".strip() if d.espesor else "-"
+            ancho = f"{d.ancho} {um_a}".strip() if d.ancho else "-"
+            largo = f"{d.largo} {um_l}".strip() if d.largo else "-"
+
+            rows.append(
+                [
+                    str(i),
+                    Paragraph(str(producto), self.styles["SmallTable"]),
+                    self._fmt_qty(qty),
+                    str(unidad),
+                    espesor,
+                    ancho,
+                    largo,
+                    self._fmt_money_cl(unit_price),
+                    self._fmt_money_cl(line_total),
+                ]
+            )
+
+        moneda_code = (getattr(getattr(orden_servicio, "Moneda", None), "etiqueta", None) or "").strip()
+        label = f"<nobr>{moneda_code} SUBTOTAL</nobr>"
+
+        rows.append([
+            "", "", "", "", "", "",
+            "",
+            Paragraph(f"<b>{label}</b>", self.styles["SmallBold"]),
+            Paragraph(f"<b>{self._fmt_money_cl(subtotal)}</b>", self.styles["SmallBold"]),
+        ])
+
+        col_widths = [
+            0.30 * inch,
+            2.10 * inch,
+            0.70 * inch,
+            0.50 * inch,
+            0.60 * inch,
+            0.60 * inch,
+            0.70 * inch,
+            1.30 * inch,
+            0.95 * inch,
+        ]
+
+        t = Table(rows, colWidths=col_widths, repeatRows=1)
+        last = len(rows) - 1
+
+        t.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.5, self.grid_grey),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 7.2),
+                    ("FONTSIZE", (0, 1), (-1, -1), 7.0),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                    ("ALIGN", (1, 1), (1, last - 1), "LEFT"),
+                    ("ALIGN", (2, 1), (6, last - 1), "CENTER"),
+                    ("ALIGN", (7, 1), (8, -1), "RIGHT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                    ("TOPPADDING", (0, 0), (-1, -1), 1),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                    ("WORDWRAP", (7, last), (7, last), "OFF"),
+                    ("BACKGROUND", (7, last), (8, last), self.subtotal_bg),
+                    ("FONTNAME", (7, last), (8, last), "Helvetica-Bold"),
+                    ("ALIGN", (7, last), (7, last), "RIGHT"),
+                    ("ALIGN", (8, last), (8, last), "RIGHT"),
+                    ("BOX", (7, last), (8, last), 0.8, self.grid_grey),
+                    ("GRID", (0, last), (6, last), 0, colors.white),
+                    ("LINEABOVE", (0, last), (6, last), 0, colors.white),
+                    ("LINEBELOW", (0, last), (6, last), 0, colors.white),
+                    ("LINEBEFORE", (0, last), (6, last), 0, colors.white),
+                    ("LINEAFTER", (0, last), (6, last), 0, colors.white),
+                ]
+            )
+        )
+        return t
+
+    def generate_pdf(self, orden_servicio: OrdenServicio, db: Session) -> BytesIO:  # type: ignore[override]
+        buffer = BytesIO()
+
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            topMargin=2.25 * inch,
+            bottomMargin=0.45 * inch,
+            leftMargin=0.55 * inch,
+            rightMargin=0.55 * inch,
+        )
+
+        elements = []
+
+        contactos_html, _ = self._get_odc_contactos(orden_servicio, db)
+
+        elements.append(self._client_block(orden_servicio, contactos_html))
+        elements.append(Spacer(1, 0.32 * inch))
+        elements.append(Paragraph(self.t("REQUEST_ITEMS"), self.styles["SmallBold"]))
+        elements.append(Spacer(1, 0.06 * inch))
+        elements.append(self._odc_products_table(orden_servicio, db))
+
+        qual_box = self._quality_obs_section(orden_servicio, db)
+        if qual_box:
+            elements.append(Spacer(1, 0.12 * inch))
+            elements.append(qual_box)
+
+        otras_txt = getattr(orden_servicio, "otras_especificaciones", None)
+        if otras_txt and str(otras_txt).strip():
+            other_specs_box = self._note_box(self.t("OTHER_SPECS"), str(otras_txt).strip())
+            if other_specs_box:
+                elements.append(Spacer(1, 0.12 * inch))
+                elements.append(other_specs_box)
+
+        elements.append(CondPageBreak(2 * inch))
+        elements.append(Spacer(1, 0.4 * inch))
+
+        nota_box = self._note_box(
+            self.t("NOTE_ODC"), getattr(orden_servicio, "nota_1", None)
+        )
+        if nota_box:
+            elements.append(nota_box)
+            elements.append(Spacer(1, 0.15 * inch))
+
+        if getattr(orden_servicio, "url_imagen", None):
+            img = self._image_page(orden_servicio.url_imagen)
+            if img:
+                elements.append(CondPageBreak(3 * inch))
+                elements.append(Spacer(1, 0.3 * inch))
+                elements.append(img)
+
+        elements.append(CondPageBreak(2 * inch))
+        elements.append(Spacer(1, 0.5 * inch))
+        elements.append(self._odc_signature(orden_servicio))
+
+        def on_page(canv, d):
+            self._draw_odc_page_header(canv, d, orden_servicio)
 
         doc.build(
             elements,

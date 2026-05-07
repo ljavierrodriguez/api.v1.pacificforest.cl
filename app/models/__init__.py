@@ -13,6 +13,7 @@ from .detalle_factura import DetalleFactura
 from .detalle_gasto import DetalleGasto
 from .detalle_ide import DetalleIde
 from .detalle_orden_compra import DetalleOrdenCompra
+from .detalle_orden_servicio import DetalleOrdenServicio
 from .detalle_pl import DetallePl
 from .detalle_proforma import DetalleProforma
 from .direccion import Direccion
@@ -21,6 +22,7 @@ from .empresa import Empresa
 from .especie import Especie
 from .estado_detalle_ple import EstadoDetallePle
 from .estado_odc import EstadoOdc
+from .estado_orden_servicio import EstadoOrdenServicio
 from .estado_oe import EstadoOe
 from .estado_pl import EstadoPl
 from .estado_proforma import EstadoProforma
@@ -32,6 +34,7 @@ from .moneda import Moneda
 from .naviera import Naviera
 from .operacion_exportacion import OperacionExportacion
 from .orden_compra import OrdenCompra
+from .orden_servicio import OrdenServicio
 from .pais import Pais
 from .parametro import Parametro
 from .plc import Plc
@@ -61,6 +64,7 @@ __all__ = [
     "DetalleGasto",
     "DetalleIde",
     "DetalleOrdenCompra",
+    "DetalleOrdenServicio",
     "DetallePl",
     "DetalleProforma",
     "Direccion",
@@ -69,6 +73,7 @@ __all__ = [
     "Especie",
     "EstadoDetallePle",
     "EstadoOdc",
+    "EstadoOrdenServicio",
     "EstadoOe",
     "EstadoPl",
     "EstadoProforma",
@@ -80,6 +85,7 @@ __all__ = [
     "Naviera",
     "OperacionExportacion",
     "OrdenCompra",
+    "OrdenServicio",
     "Pais",
     "Parametro",
     "Plc",

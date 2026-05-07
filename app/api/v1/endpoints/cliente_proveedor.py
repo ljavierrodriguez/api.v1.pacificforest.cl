@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
 
 from app.db.session import get_db
 from app.models.ciudad import Ciudad
@@ -45,17 +45,22 @@ def create_cliente_proveedor(
 def list_cliente_proveedor(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    es_proveedor: Optional[bool] = Query(None, description="Filtrar por proveedores"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset
     skip = (page - 1) * page_size
     
+    base_query = db.query(ClienteProveedor)
+    if es_proveedor is not None:
+        base_query = base_query.filter(ClienteProveedor.es_proveedor == es_proveedor)
+
     # Obtener total de elementos
-    total_items = db.query(ClienteProveedor).count()
+    total_items = base_query.count()
     
     # Obtener elementos de la página actual ordenados alfabéticamente
     items = (
-        db.query(ClienteProveedor)
+        base_query
         .order_by(ClienteProveedor.razon_social.asc(), ClienteProveedor.nombre_fantasia.asc())
         .offset(skip)
         .limit(page_size)
@@ -71,6 +76,7 @@ def search_cliente_proveedor(
     q: str = Query(..., min_length=1, description="Texto a buscar en RUT, nombre fantasía, razón social o giro"),
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    es_proveedor: Optional[bool] = Query(None, description="Filtrar por proveedores"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset
@@ -85,6 +91,9 @@ def search_cliente_proveedor(
             ClienteProveedor.giro.ilike(search),
         )
     )
+
+    if es_proveedor is not None:
+        query = query.filter(ClienteProveedor.es_proveedor == es_proveedor)
 
     # Obtener total de elementos filtrados
     total_items = query.count()

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, cast, Numeric
 from sqlalchemy.orm import Session
 from typing import List
+from decimal import Decimal, InvalidOperation
 
 from app.db.session import get_db
 from app.models.detalle_orden_compra import DetalleOrdenCompra
@@ -18,6 +19,21 @@ DetalleOrdenCompraCreate,
 from app.schemas.pagination import create_paginated_response
 
 router = APIRouter(prefix="/detalle_orden_compra", tags=["detalle_orden_compra"])
+
+
+VOLUME_EPSILON = Decimal("0.001")
+VOLUME_TOLERANCE_PCT = Decimal("0.10")
+
+
+def _to_decimal(value) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
 
 
 def _validate_producto_vs_proforma(
@@ -125,16 +141,19 @@ def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_
             DetalleOrdenCompra.id_orden_compra == orden.id_orden_compra,
         ).scalar()
 
-        nuevo_total_odc = (volumen_actual_odc_total or 0) + (payload.volumen_eq or 0)
-        limite = (volumen_proforma_total or 0) - (volumen_otros_odc_total or 0)
+        volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
+        volumen_otros_odc_total_dec = _to_decimal(volumen_otros_odc_total)
+        volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
+        nuevo_total_odc = _to_decimal(volumen_actual_odc_total) + _to_decimal(payload.volumen_eq)
+        limite = volumen_maximo_permitido - volumen_otros_odc_total_dec
 
-        if nuevo_total_odc > limite:
-            if (volumen_otros_odc_total or 0) >= (volumen_proforma_total or 0):
+        if nuevo_total_odc > (limite + VOLUME_EPSILON):
+            if volumen_otros_odc_total_dec >= (volumen_maximo_permitido - VOLUME_EPSILON):
                 raise HTTPException(
                     status_code=403,
                     detail="El volumen de la proforma ya fue completado",
                 )
-            maximo_volumen = limite
+            maximo_volumen = limite.quantize(Decimal("0.001"))
             raise HTTPException(
                 status_code=403,
                 detail=f"El volumen total supera el pendiente de la proforma ({maximo_volumen})",
@@ -195,6 +214,10 @@ def list_detalles_by_orden(
     items = []
     for detalle, producto_nombre, id_especie, especie_nombre in rows:
         item_dict = detalle.to_dict() if hasattr(detalle, "to_dict") else dict(detalle.__dict__)
+        if item_dict.get("volumen") is not None:
+            item_dict["volumen"] = f"{float(item_dict['volumen']):.2f}"
+        if item_dict.get("volumen_eq") is not None:
+            item_dict["volumen_eq"] = f"{float(item_dict['volumen_eq']):.2f}"
         item_dict["producto_nombre"] = producto_nombre
         item_dict["id_especie"] = id_especie
         item_dict["especie_nombre"] = especie_nombre
@@ -251,16 +274,19 @@ def update_detalle(item_id: int, payload: DetalleOrdenCompraUpdate, db: Session 
             DetalleOrdenCompra.id_detalle_odc != item_id,
         ).scalar()
 
-        nuevo_total_odc = (volumen_actual_odc_total or 0) + (new_volumen_eq or 0)
-        limite = (volumen_proforma_total or 0) - (volumen_otros_odc_total or 0)
+        volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
+        volumen_otros_odc_total_dec = _to_decimal(volumen_otros_odc_total)
+        volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
+        nuevo_total_odc = _to_decimal(volumen_actual_odc_total) + _to_decimal(new_volumen_eq)
+        limite = volumen_maximo_permitido - volumen_otros_odc_total_dec
 
-        if nuevo_total_odc > limite:
-            if (volumen_otros_odc_total or 0) >= (volumen_proforma_total or 0):
+        if nuevo_total_odc > (limite + VOLUME_EPSILON):
+            if volumen_otros_odc_total_dec >= (volumen_maximo_permitido - VOLUME_EPSILON):
                 raise HTTPException(
                     status_code=403,
                     detail="El volumen de la proforma ya fue completado",
                 )
-            maximo_volumen = limite
+            maximo_volumen = limite.quantize(Decimal("0.001"))
             raise HTTPException(
                 status_code=403,
                 detail=f"El volumen total supera el pendiente de la proforma ({maximo_volumen})",

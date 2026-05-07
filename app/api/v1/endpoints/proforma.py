@@ -7,6 +7,7 @@ from io import BytesIO
 import os
 import shutil
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from app.db.session import get_db
 from app.models.proforma import Proforma
 from app.models.detalle_proforma import DetalleProforma
@@ -337,9 +338,12 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
         OrdenCompra.id_proforma == item_id
     ).scalar() or 0
 
-    vol_total_f = float(volumen_total or 0)
-    vol_asig_f = float(volumen_asignado or 0)
-    vol_pend_f = max(vol_total_f - vol_asig_f, 0)
+    def _q2(value) -> Decimal:
+        return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    vol_total_f = _q2(volumen_total)
+    vol_asig_f = _q2(volumen_asignado)
+    vol_pend_f = _q2(max(vol_total_f - vol_asig_f, Decimal("0")))
 
     estado_flujo = 'sin-oc'
     if oc_asociadas == 0:
@@ -378,7 +382,7 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
             "piezas": d.piezas,
             "precio_unitario": d.precio_unitario,
             "subtotal": d.subtotal,
-            "volumen_eq": d.volumen_eq,
+            "volumen_eq": _q2(d.volumen_eq),
             "precio_eq": d.precio_eq,
         })
 
@@ -404,7 +408,7 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
             "id_orden_compra": oc.id_orden_compra,
             "proveedor_nombre": getattr(proveedor, "razon_social", None),
             "fecha_emision": oc.fecha_emision,
-            "volumenTotal": vol_by_oc.get(oc.id_orden_compra, 0),
+            "volumenTotal": _q2(vol_by_oc.get(oc.id_orden_compra, 0)),
             "estado_nombre": getattr(estado_odc, "nombre", None),
             "id_estado_odc": oc.id_estado_odc,
             "vinculado": oc.vinculado,

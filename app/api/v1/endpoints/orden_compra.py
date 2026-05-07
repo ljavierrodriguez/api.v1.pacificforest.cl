@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List, Optional
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 import shutil
 from datetime import datetime
@@ -26,6 +26,25 @@ from app.services.pdf_generator import OrdenCompraPDFGenerator
 PaginatedOrdenCompraResponse = create_paginated_response_model(OrdenCompraRead)
 
 router = APIRouter(prefix="/orden_compra", tags=["orden_compra"])
+
+VOLUME_TOLERANCE_PCT = Decimal("0.10")
+VOLUME_EPSILON = Decimal("0.001")
+
+
+def _round_volume(value, decimals: int = 2) -> Decimal:
+    """Round volume values consistently for API responses."""
+    if value is None:
+        return Decimal("0")
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+    if decimals <= 0:
+        return decimal_value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+
+    quantizer = Decimal("1").scaleb(-decimals)
+    return decimal_value.quantize(quantizer, rounding=ROUND_HALF_UP)
 
 
 @router.post("/", response_model=OrdenCompraRead, status_code=201, summary='POST OrdenCompra', description='Crear una nueva orden de compra.')
@@ -122,16 +141,20 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
             OrdenCompra.id_proforma == payload.id_proforma,
         ).scalar()
 
-        pendiente = _to_decimal(volumen_proforma_total) - _to_decimal(volumen_odc_total)
-        if volumen_payload > pendiente:
-            if pendiente <= 0:
+        volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
+        volumen_odc_total_dec = _to_decimal(volumen_odc_total)
+        volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
+        pendiente = volumen_maximo_permitido - volumen_odc_total_dec
+
+        if volumen_payload > (pendiente + VOLUME_EPSILON):
+            if pendiente <= VOLUME_EPSILON:
                 raise HTTPException(
                     status_code=403,
                     detail="El volumen de la proforma ya fue completado",
                 )
             raise HTTPException(
                 status_code=403,
-                detail=f"El volumen total de la orden supera el pendiente de la proforma ({pendiente})",
+                detail=f"El volumen total de la orden supera el pendiente permitido ({pendiente.quantize(Decimal('0.001'))})",
             )
 
     for detalle in payload.detalles:
@@ -208,7 +231,7 @@ def list_orden_compra(
         oc = row[0]
         item_dict = oc.__dict__.copy()
         item_dict.update({
-            "volumenTotal": row.volumenTotal,
+            "volumenTotal": _round_volume(row.volumenTotal),
             "proveedor_nombre": row.proveedor_nombre,
             "usuario_nombre": row.usuario_nombre,
             "moneda_nombre": row.moneda_nombre,
@@ -284,7 +307,7 @@ def search_orden_compra(
         oc = row[0]
         item_dict = oc.__dict__.copy()
         item_dict.update({
-            "volumenTotal": row.volumenTotal,
+            "volumenTotal": _round_volume(row.volumenTotal),
             "proveedor_nombre": row.proveedor_nombre,
             "usuario_nombre": row.usuario_nombre,
             "moneda_nombre": row.moneda_nombre,
@@ -304,8 +327,15 @@ def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(status_code=404, detail="OrdenCompra not found")
 
+    volumen_total = db.query(
+        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+    ).filter(
+        DetalleOrdenCompra.id_orden_compra == item_id
+    ).scalar()
+
     # Serializar la orden de compra
     oc_dict = item.serialize() if hasattr(item, 'serialize') else dict(item.__dict__)
+    oc_dict["volumenTotal"] = _round_volume(volumen_total)
 
     # Agregar etiquetas si existen
     proveedor = getattr(item, "ClienteProveedor", None)

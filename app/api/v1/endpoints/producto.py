@@ -29,16 +29,27 @@ def create_producto(payload: ProductoCreate, db: Session = Depends(get_db)):
 def list_producto(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    id_especie: int | None = Query(None, description="Filtrar productos por especie"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset
     skip = (page - 1) * page_size
+
+    base_query = db.query(Producto)
+    if id_especie is not None:
+        base_query = base_query.filter(Producto.id_especie == id_especie)
     
     # Obtener total de elementos
-    total_items = db.query(Producto).count()
+    total_items = base_query.count()
     
     # Obtener elementos de la página actual
-    items = db.query(Producto).offset(skip).limit(page_size).all()
+    items = (
+        base_query
+        .order_by(Producto.nombre_producto_esp.asc())
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
     
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)

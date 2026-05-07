@@ -23,6 +23,7 @@ from .empresa import router as empresa_router
 from .especie import router as especie_router
 from .estado_detalle_ple import router as estado_detalle_ple_router
 from .estado_odc import router as estado_odc_router
+from .estado_orden_servicio import router as estado_orden_servicio_router
 from .estado_oe import router as estado_oe_router
 from .estado_pl import router as estado_pl_router
 from .estado_proforma import router as estado_proforma_router
@@ -34,6 +35,7 @@ from .moneda import router as moneda_router
 from .naviera import router as naviera_router
 from .operacion_exportacion import router as operacion_exportacion_router
 from .orden_compra import router as orden_compra_router
+from .orden_servicio import router as orden_servicio_router
 from .pais import router as pais_router
 from .parametro import router as parametro_router
 from .plc import router as plc_router
@@ -73,6 +75,7 @@ router.include_router(empresa_router)
 router.include_router(especie_router)
 router.include_router(estado_detalle_ple_router)
 router.include_router(estado_odc_router)
+router.include_router(estado_orden_servicio_router)
 router.include_router(estado_oe_router)
 router.include_router(estado_pl_router)
 router.include_router(estado_proforma_router)
@@ -84,6 +87,7 @@ router.include_router(moneda_router)
 router.include_router(naviera_router)
 router.include_router(operacion_exportacion_router)
 router.include_router(orden_compra_router)
+router.include_router(orden_servicio_router)
 router.include_router(pais_router)
 router.include_router(parametro_router)
 router.include_router(plc_router)
