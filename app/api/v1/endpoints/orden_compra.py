@@ -9,9 +9,12 @@ import shutil
 from datetime import datetime
 
 from app.db.session import get_db
+from app.core.security import get_current_user
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.detalle_proforma import DetalleProforma
 from app.models.orden_compra import OrdenCompra
+from app.models.especie import Especie
+from app.models.producto import Producto
 from app.models.cliente_proveedor import ClienteProveedor
 from app.models.usuario import User
 from app.models.moneda import Moneda
@@ -47,6 +50,107 @@ def _round_volume(value, decimals: int = 2) -> Decimal:
     return decimal_value.quantize(quantizer, rounding=ROUND_HALF_UP)
 
 
+def _to_decimal(value) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+
+def _validate_especies_orden_vs_proforma(db: Session, proforma_id: int, orden_compra_id: int) -> None:
+    especies_proforma_rows = (
+        db.query(Producto.id_especie, Especie.nombre_esp)
+        .join(DetalleProforma, DetalleProforma.id_producto == Producto.id_producto)
+        .outerjoin(Especie, Especie.id_especie == Producto.id_especie)
+        .filter(DetalleProforma.id_proforma == proforma_id)
+        .distinct()
+        .all()
+    )
+    especies_orden_rows = (
+        db.query(Producto.id_especie, Especie.nombre_esp)
+        .join(DetalleOrdenCompra, DetalleOrdenCompra.id_producto == Producto.id_producto)
+        .outerjoin(Especie, Especie.id_especie == Producto.id_especie)
+        .filter(DetalleOrdenCompra.id_orden_compra == orden_compra_id)
+        .distinct()
+        .all()
+    )
+
+    especies_proforma = {especie_id for especie_id, _ in especies_proforma_rows if especie_id is not None}
+    especies_orden = {especie_id for especie_id, _ in especies_orden_rows if especie_id is not None}
+    nombre_especie_orden = {
+        especie_id: (nombre_esp or "SIN NOMBRE")
+        for especie_id, nombre_esp in especies_orden_rows
+        if especie_id is not None
+    }
+
+    if especies_proforma and not especies_orden:
+        raise HTTPException(
+            status_code=403,
+            detail="La orden no tiene productos con especie válida para vincular a la proforma",
+        )
+
+    especies_no_permitidas = especies_orden - especies_proforma
+    if especies_no_permitidas:
+        especies_no_permitidas_txt = ", ".join(
+            sorted(
+                nombre_especie_orden.get(especie_id, "SIN NOMBRE")
+                for especie_id in especies_no_permitidas
+            )
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=f"La orden contiene especie(s) que no existen en la proforma: {especies_no_permitidas_txt}",
+        )
+
+
+def _validate_volumen_orden_vs_proforma(db: Session, proforma_id: int, orden_compra_id: int) -> None:
+    volumen_orden = db.query(
+        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+    ).filter(
+        DetalleOrdenCompra.id_orden_compra == orden_compra_id,
+    ).scalar()
+
+    volumen_proforma_total = db.query(
+        func.coalesce(func.sum(DetalleProforma.volumen_eq), 0)
+    ).filter(
+        DetalleProforma.id_proforma == proforma_id,
+    ).scalar()
+
+    volumen_odc_total = db.query(
+        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+    ).join(
+        OrdenCompra,
+        DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
+    ).filter(
+        OrdenCompra.id_proforma == proforma_id,
+        OrdenCompra.id_orden_compra != orden_compra_id,
+    ).scalar()
+
+    volumen_orden_dec = _to_decimal(volumen_orden)
+    volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
+    volumen_odc_total_dec = _to_decimal(volumen_odc_total)
+
+    volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
+    pendiente = volumen_maximo_permitido - volumen_odc_total_dec
+
+    pendiente_real = volumen_proforma_total_dec - volumen_odc_total_dec
+
+    if volumen_orden_dec > (pendiente + VOLUME_EPSILON):
+        if pendiente <= VOLUME_EPSILON:
+            raise HTTPException(
+                status_code=403,
+                detail="El volumen de la proforma ya fue completado",
+            )
+        raise HTTPException(
+            status_code=403,
+            detail=f"El volumen total de la orden supera el pendiente de la proforma ({pendiente_real.quantize(Decimal('0.001'))})",
+        )
+
+
 @router.post("/", response_model=OrdenCompraRead, status_code=201, summary='POST OrdenCompra', description='Crear una nueva orden de compra.')
 def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db)):
     # Validar que detalles no esté vacío
@@ -55,16 +159,6 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
             status_code=400,
             detail="La orden de compra debe tener al menos 1 detalle",
         )
-
-    def _to_decimal(value) -> Decimal:
-        if value is None:
-            return Decimal("0")
-        if isinstance(value, Decimal):
-            return value
-        try:
-            return Decimal(str(value))
-        except (InvalidOperation, ValueError, TypeError):
-            return Decimal("0")
 
     obj = OrdenCompra(
         id_proforma=payload.id_proforma,
@@ -454,8 +548,43 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
     item = db.get(OrdenCompra, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="OrdenCompra not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+
+    payload_data = payload.model_dump(exclude_unset=True)
+
+    if "id_proforma" in payload_data:
+        nuevo_id_proforma = payload_data.get("id_proforma")
+        if nuevo_id_proforma is not None and nuevo_id_proforma != item.id_proforma:
+            _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
+            _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
+
+    for k, v in payload_data.items():
         setattr(item, k, v)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/{item_id}/desvincular", response_model=OrdenCompraRead, summary='Desvincular OrdenCompra', description='Desvincula la orden de compra de su proforma y la deja como orden directa (solo admin).')
+def desvincular_orden_compra(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if (getattr(current_user, "login", "") or "").strip().lower() != "administrador":
+        raise HTTPException(status_code=403, detail="Solo un administrador puede desvincular una orden de compra")
+
+    item = db.get(OrdenCompra, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="OrdenCompra not found")
+
+    if item.id_proforma is None:
+        raise HTTPException(status_code=400, detail="La orden de compra ya es directa")
+
+    item.id_proforma_anterior = item.id_proforma
+    item.id_proforma = None
+    item.vinculado = 0
+
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -476,6 +605,11 @@ def delete_orden_compra(item_id: int, db: Session = Depends(get_db)):
         ).count()
         
         if detalles_count > 0:
+            if item.id_proforma is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede eliminar la orden de compra porque está asociada a una proforma",
+                )
             raise HTTPException(
                 status_code=400, 
                 detail=f"No se puede eliminar la orden de compra porque tiene {detalles_count} detalle(s) asociado(s)"

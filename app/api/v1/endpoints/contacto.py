@@ -22,17 +22,23 @@ def create_contacto(payload: ContactoCreate, db: Session = Depends(get_db)):
 @router.get("/", summary='GET Contacto', description='GET Contacto endpoint. Replace this placeholder with a meaningful description.')
 def list_contactos(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=200, description="Tamaño de página"),
+    id_cliente_proveedor: int | None = Query(None, description="Filtrar por cliente/proveedor"),
     db: Session = Depends(get_db)
 ):
+    query = db.query(Contacto)
+
+    if id_cliente_proveedor is not None:
+        query = query.filter(Contacto.id_cliente_proveedor == id_cliente_proveedor)
+
     # Calcular offset
     skip = (page - 1) * page_size
     
     # Obtener total de elementos
-    total_items = db.query(Contacto).count()
+    total_items = query.count()
     
     # Obtener elementos de la página actual
-    items = db.query(Contacto).offset(skip).limit(page_size).all()
+    items = query.offset(skip).limit(page_size).all()
     
     # Crear respuesta paginada
     return create_paginated_response(items, page, page_size, total_items)

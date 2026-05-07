@@ -45,6 +45,7 @@ def create_cliente_proveedor(
 def list_cliente_proveedor(
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    es_cliente: Optional[bool] = Query(None, description="Filtrar por clientes"),
     es_proveedor: Optional[bool] = Query(None, description="Filtrar por proveedores"),
     db: Session = Depends(get_db)
 ):
@@ -52,6 +53,8 @@ def list_cliente_proveedor(
     skip = (page - 1) * page_size
     
     base_query = db.query(ClienteProveedor)
+    if es_cliente is not None:
+        base_query = base_query.filter(ClienteProveedor.es_cliente == es_cliente)
     if es_proveedor is not None:
         base_query = base_query.filter(ClienteProveedor.es_proveedor == es_proveedor)
 
@@ -76,6 +79,7 @@ def search_cliente_proveedor(
     q: str = Query(..., min_length=1, description="Texto a buscar en RUT, nombre fantasía, razón social o giro"),
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    es_cliente: Optional[bool] = Query(None, description="Filtrar por clientes"),
     es_proveedor: Optional[bool] = Query(None, description="Filtrar por proveedores"),
     db: Session = Depends(get_db)
 ):
@@ -92,6 +96,8 @@ def search_cliente_proveedor(
         )
     )
 
+    if es_cliente is not None:
+        query = query.filter(ClienteProveedor.es_cliente == es_cliente)
     if es_proveedor is not None:
         query = query.filter(ClienteProveedor.es_proveedor == es_proveedor)
 
