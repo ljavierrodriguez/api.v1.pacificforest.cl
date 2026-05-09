@@ -15,6 +15,7 @@ from app.models.orden_compra import OrdenCompra
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.models.empresa import Empresa
 from app.models.moneda import Moneda
+from app.models.forma_pago import FormaPago
 from app.models.estado_proforma import EstadoProforma
 from app.models.usuario import User
 from app.models.direccion import Direccion
@@ -129,6 +130,7 @@ def list_proforma(
         Moneda.etiqueta.label("moneda_nombre"),
         EstadoProforma.nombre.label("estado_nombre"),
         User.nombre.label("usuario_nombre"),
+        FormaPago.nombre.label("forma_pago_nombre"),
         CPFacturar.razon_social.label("facturar_a_nombre"),
         OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion")
     ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
@@ -138,6 +140,7 @@ def list_proforma(
      .outerjoin(EstadoProforma, Proforma.id_estado_proforma == EstadoProforma.id_estado_proforma)\
      .outerjoin(User, Proforma.id_usuario_encargado == User.id_usuario)\
      .outerjoin(OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion)\
+    .outerjoin(FormaPago, OperacionExportacion.id_forma_pago == FormaPago.id_forma_pago)\
      .outerjoin(DirFacturar, Proforma.id_direccion_facturar == DirFacturar.id_direccion)\
      .outerjoin(CPFacturar, DirFacturar.id_cliente_proveedor == CPFacturar.id_cliente_proveedor)\
      .order_by(desc(Proforma.id_proforma))\
@@ -175,6 +178,7 @@ def list_proforma(
             "moneda_nombre": row.moneda_nombre,
             "estado_nombre": row.estado_nombre,
             "usuario_nombre": str(row.usuario_nombre) if row.usuario_nombre else None,
+            "forma_pago_nombre": str(row.forma_pago_nombre) if row.forma_pago_nombre else None,
             "facturar_a_nombre": str(row.facturar_a_nombre) if row.facturar_a_nombre else None,
             "id_operacion_exportacion": row.id_operacion_exportacion
         })
@@ -233,6 +237,7 @@ def search_proforma(
         Moneda.etiqueta.label("moneda_nombre"),
         EstadoProforma.nombre.label("estado_nombre"),
         User.nombre.label("usuario_nombre"),
+        FormaPago.nombre.label("forma_pago_nombre"),
         CPFacturar.razon_social.label("facturar_a_nombre"),
         OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion")
     ).outerjoin(volumen_total_sub, Proforma.id_proforma == volumen_total_sub.c.id_proforma)\
@@ -242,6 +247,7 @@ def search_proforma(
      .outerjoin(EstadoProforma, Proforma.id_estado_proforma == EstadoProforma.id_estado_proforma)\
      .outerjoin(User, Proforma.id_usuario_encargado == User.id_usuario)\
      .outerjoin(OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion)\
+    .outerjoin(FormaPago, OperacionExportacion.id_forma_pago == FormaPago.id_forma_pago)\
      .outerjoin(DirFacturar, Proforma.id_direccion_facturar == DirFacturar.id_direccion)\
      .outerjoin(CPFacturar, DirFacturar.id_cliente_proveedor == CPFacturar.id_cliente_proveedor)
 
@@ -284,6 +290,7 @@ def search_proforma(
             "moneda_nombre": row.moneda_nombre,
             "estado_nombre": row.estado_nombre,
             "usuario_nombre": str(row.usuario_nombre) if row.usuario_nombre else None,
+            "forma_pago_nombre": str(row.forma_pago_nombre) if row.forma_pago_nombre else None,
             "facturar_a_nombre": str(row.facturar_a_nombre) if row.facturar_a_nombre else None,
             "id_operacion_exportacion": row.id_operacion_exportacion
         })

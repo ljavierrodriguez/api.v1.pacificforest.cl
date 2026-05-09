@@ -78,6 +78,7 @@ class ProformaRead(BaseModel):
     moneda_nombre: Optional[str] = Field(None, description="Etiqueta o nombre de la moneda")
     estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
     usuario_nombre: Optional[str] = Field(None, description="Nombre del usuario encargado")
+    forma_pago_nombre: Optional[str] = Field(None, description="Nombre de la forma de pago")
     facturar_a_nombre: Optional[str] = Field(None, description="Nombre del cliente a facturar")
     id_operacion_exportacion: Optional[int] = Field(None, description="ID de la operación de exportación asociada")
 
