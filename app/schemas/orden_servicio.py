@@ -28,7 +28,7 @@ class OrdenServicioCreate(BaseModel):
     id_cliente_proveedor: int = Field(..., description="ID del proveedor")
     id_usuario_encargado: int = Field(..., description="ID del usuario encargado")
     id_usuario: int = Field(..., description="ID del usuario que crea la orden")
-    id_bodega: int = Field(..., description="ID de la bodega")
+    servicio: str = Field(..., max_length=120, description="Tipo de servicio")
     destino: Optional[str] = Field(None, max_length=15)
     id_moneda: int = Field(..., description="ID de la moneda")
     id_empresa: Optional[int] = None
@@ -56,7 +56,7 @@ class OrdenServicioRead(BaseModel):
     id_cliente_proveedor: int
     id_usuario_encargado: int
     id_usuario: int
-    id_bodega: int
+    servicio: str
     destino: Optional[str] = None
     id_moneda: int
     id_empresa: Optional[int] = None
@@ -76,7 +76,6 @@ class OrdenServicioRead(BaseModel):
     proveedor_nombre: Optional[str] = Field(None, description="Nombre del proveedor")
     usuario_nombre: Optional[str] = Field(None, description="Nombre del usuario encargado")
     moneda_nombre: Optional[str] = Field(None, description="Nombre de la moneda")
-    bodega_nombre: Optional[str] = Field(None, description="Nombre de la bodega")
     empresa_nombre: Optional[str] = Field(None, description="Nombre de la empresa")
     estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
 
@@ -89,7 +88,7 @@ class OrdenServicioUpdate(BaseModel):
     id_cliente_proveedor: Optional[int] = None
     id_usuario_encargado: Optional[int] = None
     id_usuario: Optional[int] = None
-    id_bodega: Optional[int] = None
+    servicio: Optional[str] = Field(None, max_length=120)
     destino: Optional[str] = Field(None, max_length=15)
     id_moneda: Optional[int] = None
     id_empresa: Optional[int] = None

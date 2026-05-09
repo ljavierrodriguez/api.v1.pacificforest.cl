@@ -16,7 +16,7 @@ class OrdenServicio(Base):
     id_usuario_encargado = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
     id_usuario = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
 
-    id_bodega = Column(Integer, ForeignKey("bodega.id_bodega"), nullable=False)
+    servicio = Column(String(120), nullable=False)
     destino = Column(String(15))
 
     id_moneda = Column(Integer, ForeignKey("moneda.id_moneda"), nullable=False)
@@ -55,7 +55,6 @@ class OrdenServicio(Base):
     UsuarioEncargado = relationship("User", foreign_keys=[id_usuario_encargado])
     Empresa = relationship("Empresa")
     Moneda = relationship("Moneda")
-    Bodega = relationship("Bodega")
     DireccionProveedor = relationship("Direccion")
     EstadoOrdenServicio = relationship(
         "EstadoOrdenServicio",
@@ -86,7 +85,7 @@ class OrdenServicio(Base):
             "id_cliente_proveedor": self.id_cliente_proveedor,
             "id_usuario_encargado": self.id_usuario_encargado,
             "id_usuario": self.id_usuario,
-            "id_bodega": self.id_bodega,
+            "servicio": self.servicio,
             "destino": self.destino,
             "id_moneda": self.id_moneda,
             "id_empresa": self.id_empresa,

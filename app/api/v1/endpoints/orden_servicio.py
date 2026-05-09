@@ -14,7 +14,6 @@ from app.models.orden_servicio import OrdenServicio
 from app.models.cliente_proveedor import ClienteProveedor
 from app.models.usuario import User
 from app.models.moneda import Moneda
-from app.models.bodega import Bodega
 from app.models.empresa import Empresa
 from app.models.estado_orden_servicio import EstadoOrdenServicio
 from app.schemas.orden_servicio import OrdenServicioCreate, OrdenServicioRead, OrdenServicioUpdate
@@ -61,7 +60,7 @@ def create_orden_servicio(payload: OrdenServicioCreate, db: Session = Depends(ge
         id_cliente_proveedor=payload.id_cliente_proveedor,
         id_usuario_encargado=payload.id_usuario_encargado,
         id_usuario=payload.id_usuario,
-        id_bodega=payload.id_bodega,
+        servicio=payload.servicio,
         destino=payload.destino,
         id_moneda=payload.id_moneda,
         id_empresa=payload.id_empresa,
@@ -113,14 +112,12 @@ def list_orden_servicio(
         ClienteProveedor.razon_social.label("proveedor_nombre"),
         User.nombre.label("usuario_nombre"),
         Moneda.etiqueta.label("moneda_nombre"),
-        Bodega.nombre.label("bodega_nombre"),
         Empresa.nombre_fantasia.label("empresa_nombre"),
         EstadoOrdenServicio.nombre.label("estado_nombre"),
     ).outerjoin(volumen_sub, OrdenServicio.id_orden_servicio == volumen_sub.c.id_orden_servicio)\
      .outerjoin(ClienteProveedor, OrdenServicio.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)\
      .outerjoin(User, OrdenServicio.id_usuario_encargado == User.id_usuario)\
      .outerjoin(Moneda, OrdenServicio.id_moneda == Moneda.id_moneda)\
-     .outerjoin(Bodega, OrdenServicio.id_bodega == Bodega.id_bodega)\
      .outerjoin(Empresa, OrdenServicio.id_empresa == Empresa.id_empresa)\
      .outerjoin(EstadoOrdenServicio, OrdenServicio.id_estado_orden_servicio == EstadoOrdenServicio.id_estado_orden_servicio)
 
@@ -136,7 +133,6 @@ def list_orden_servicio(
             "proveedor_nombre": row.proveedor_nombre,
             "usuario_nombre": row.usuario_nombre,
             "moneda_nombre": row.moneda_nombre,
-            "bodega_nombre": row.bodega_nombre,
             "empresa_nombre": row.empresa_nombre,
             "estado_nombre": row.estado_nombre,
         })
@@ -167,14 +163,12 @@ def search_orden_servicio(
         ClienteProveedor.razon_social.label("proveedor_nombre"),
         User.nombre.label("usuario_nombre"),
         Moneda.etiqueta.label("moneda_nombre"),
-        Bodega.nombre.label("bodega_nombre"),
         Empresa.nombre_fantasia.label("empresa_nombre"),
         EstadoOrdenServicio.nombre.label("estado_nombre"),
     ).outerjoin(volumen_sub, OrdenServicio.id_orden_servicio == volumen_sub.c.id_orden_servicio)\
      .outerjoin(ClienteProveedor, OrdenServicio.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)\
      .outerjoin(User, OrdenServicio.id_usuario_encargado == User.id_usuario)\
      .outerjoin(Moneda, OrdenServicio.id_moneda == Moneda.id_moneda)\
-     .outerjoin(Bodega, OrdenServicio.id_bodega == Bodega.id_bodega)\
      .outerjoin(Empresa, OrdenServicio.id_empresa == Empresa.id_empresa)\
      .outerjoin(EstadoOrdenServicio, OrdenServicio.id_estado_orden_servicio == EstadoOrdenServicio.id_estado_orden_servicio)
 
@@ -198,7 +192,6 @@ def search_orden_servicio(
             "proveedor_nombre": row.proveedor_nombre,
             "usuario_nombre": row.usuario_nombre,
             "moneda_nombre": row.moneda_nombre,
-            "bodega_nombre": row.bodega_nombre,
             "empresa_nombre": row.empresa_nombre,
             "estado_nombre": row.estado_nombre,
         })
@@ -225,14 +218,12 @@ def get_orden_servicio(item_id: int, db: Session = Depends(get_db)):
     proveedor = getattr(item, "ClienteProveedor", None)
     usuario = getattr(item, "UsuarioEncargado", None)
     moneda = getattr(item, "Moneda", None)
-    bodega = getattr(item, "Bodega", None)
     empresa = getattr(item, "Empresa", None)
     estado = getattr(item, "EstadoOrdenServicio", None)
 
     os_dict["proveedor_nombre"] = getattr(proveedor, "razon_social", None)
     os_dict["usuario_nombre"] = getattr(usuario, "nombre", None)
     os_dict["moneda_nombre"] = getattr(moneda, "etiqueta", None)
-    os_dict["bodega_nombre"] = getattr(bodega, "nombre", None)
     os_dict["empresa_nombre"] = getattr(empresa, "nombre_fantasia", None)
     os_dict["estado_nombre"] = getattr(estado, "nombre", None)
 
