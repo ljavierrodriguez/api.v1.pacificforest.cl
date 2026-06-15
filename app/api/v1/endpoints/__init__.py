@@ -9,6 +9,7 @@ from .clausula_venta import router as clausula_venta_router
 from .cliente_proveedor import router as cliente_proveedor_router
 from .contacto import router as contacto_router
 from .contacto_orden_compra import router as contacto_orden_compra_router
+from .contacto_orden_servicio import router as contacto_orden_servicio_router
 from .contacto_proforma import router as contacto_proforma_router
 from .contenedor import router as contenedor_router
 from .detalle_factura import router as detalle_factura_router
@@ -36,6 +37,7 @@ from .naviera import router as naviera_router
 from .operacion_exportacion import router as operacion_exportacion_router
 from .orden_compra import router as orden_compra_router
 from .orden_servicio import router as orden_servicio_router
+from .packinglist import router as packinglist_router
 from .pais import router as pais_router
 from .parametro import router as parametro_router
 from .plc import router as plc_router
@@ -61,6 +63,7 @@ router.include_router(clausula_venta_router)
 router.include_router(cliente_proveedor_router)
 router.include_router(contacto_router)
 router.include_router(contacto_orden_compra_router)
+router.include_router(contacto_orden_servicio_router)
 router.include_router(contacto_proforma_router)
 router.include_router(contenedor_router)
 router.include_router(detalle_factura_router)
@@ -88,6 +91,7 @@ router.include_router(naviera_router)
 router.include_router(operacion_exportacion_router)
 router.include_router(orden_compra_router)
 router.include_router(orden_servicio_router)
+router.include_router(packinglist_router)
 router.include_router(pais_router)
 router.include_router(parametro_router)
 router.include_router(plc_router)

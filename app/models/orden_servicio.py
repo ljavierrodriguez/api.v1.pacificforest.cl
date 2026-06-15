@@ -1,6 +1,7 @@
 from datetime import date
 from sqlalchemy import Integer, String, Date, Numeric, ForeignKey, event, select, func, Column
 from sqlalchemy.orm import relationship, validates
+from sqlalchemy import Text
 from app.db.base import Base
 
 
@@ -23,21 +24,31 @@ class OrdenServicio(Base):
     id_empresa = Column(Integer, ForeignKey("empresa.id_empresa"))
     id_direccion_proveedor = Column(Integer, ForeignKey("direccion.id_direccion"), nullable=False)
 
-    observacion = Column(String(1000))
-    nota_1 = Column(String(1000))
-    otras_especificaciones = Column(String(1000))
+    observacion = Column(Text)
+    nota_1 = Column(Text)
+    otras_especificaciones = Column(Text)
     url_imagen = Column(String(100))
 
     valor_neto = Column(Numeric(13, 3), nullable=False)
     iva = Column(Numeric(12, 3), nullable=False)
     tasa_iva = Column(Numeric(6, 3))
     valor_total = Column(Numeric(12, 3), nullable=False)
+    flete = Column(Numeric(12, 2), default=0)
 
     id_estado_orden_servicio = Column(
         Integer,
         ForeignKey("estado_orden_servicio.id_estado_orden_servicio"),
         nullable=False,
     )
+
+    id_orden_compra = Column(Integer,ForeignKey("orden_compra.id_orden_compra"),nullable=True)
+    
+    
+    OrdenCompra = relationship(
+    "OrdenCompra",
+    foreign_keys=[id_orden_compra]
+)
+
 
     DetalleOrdenServicio = relationship(
         "DetalleOrdenServicio",
@@ -60,6 +71,14 @@ class OrdenServicio(Base):
         "EstadoOrdenServicio",
         back_populates="OrdenesServicio",
         foreign_keys=[id_estado_orden_servicio],
+    )
+
+    ContactosOrdenServicio = relationship(
+        "ContactoOrdenServicio",
+        back_populates="OrdenServicio",
+        lazy="dynamic",
+        cascade=None,
+        passive_deletes=False,
     )
 
     @validates("fecha_entrega", "fecha_emision")
@@ -99,6 +118,7 @@ class OrdenServicio(Base):
             "tasa_iva": as_float(self.tasa_iva),
             "valor_total": as_float(self.valor_total),
             "id_estado_orden_servicio": self.id_estado_orden_servicio,
+            "id_orden_compra": self.id_orden_compra,
         }
 
     def __repr__(self) -> str:

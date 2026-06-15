@@ -220,7 +220,7 @@ def update_usuario(
 
     return item.to_dict()
 
-
+"""
 @router.post(
     "/{item_id}/reset-password",
     summary="Restablecer contraseña",
@@ -253,7 +253,40 @@ def reset_usuario_password(
         send_email(item.correo, subject, body)
 
     return {"ok": True}
+"""
 
+
+
+@router.post("/{item_id}/reset-password")
+def reset_usuario_password(
+    item_id: int,
+    db: Session = Depends(get_db),
+):
+    item = db.query(User).filter(User.id_usuario == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    token = create_password_reset_token(item.id_usuario)
+    separator = "&" if "?" in settings.PASSWORD_RESET_URL else "?"
+    reset_url = f"{settings.PASSWORD_RESET_URL}{separator}token={token}"
+
+    subject = "Restablecer contraseña"
+    body = (
+        f"Hola {item.nombre},\n\n"
+        "Se solicitó un restablecimiento de contraseña.\n"
+        f"Puedes crear una nueva contraseña en el siguiente link:\n{reset_url}\n\n"
+        "Si no solicitaste este cambio, ignora este correo.\n"
+    )
+
+    try:
+        send_email(item.correo, subject, body)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error enviando correo: {str(e)}"
+        )
+
+    return {"ok": True}
 
 @router.post("/reset-password/confirm", summary="Confirmar restablecimiento", description="Confirma un restablecimiento de contraseña con token.")
 def confirm_reset_password(payload: PasswordResetConfirm, db: Session = Depends(get_db)):

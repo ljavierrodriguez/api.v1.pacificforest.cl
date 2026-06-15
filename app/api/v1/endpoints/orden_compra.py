@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List, Optional
+from sqlalchemy import cast, String
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 import shutil
@@ -32,6 +33,13 @@ router = APIRouter(prefix="/orden_compra", tags=["orden_compra"])
 
 VOLUME_TOLERANCE_PCT = Decimal("0.10")
 VOLUME_EPSILON = Decimal("0.001")
+
+
+def _is_directa(vinculado_value) -> bool:
+    try:
+        return int(vinculado_value or 0) == 1
+    except (ValueError, TypeError):
+        return False
 
 
 def _round_volume(value, decimals: int = 2) -> Decimal:
@@ -128,6 +136,7 @@ def _validate_volumen_orden_vs_proforma(db: Session, proforma_id: int, orden_com
     ).filter(
         OrdenCompra.id_proforma == proforma_id,
         OrdenCompra.id_orden_compra != orden_compra_id,
+        func.coalesce(OrdenCompra.vinculado, 0) != 1,
     ).scalar()
 
     volumen_orden_dec = _to_decimal(volumen_orden)
@@ -188,8 +197,10 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     db.add(obj)
     db.flush()
 
-    # Validar productos y volumen contra la proforma, incluso para OCs clonadas.
-    if payload.id_proforma:
+    # Validar productos y volumen contra la proforma solo para OCs normales.
+    # OCs directas/asignadas (vinculado=1) no se validan por volumen ni por producto de proforma.
+    es_oc_directa = _is_directa(payload.vinculado)
+    if payload.id_proforma and not es_oc_directa:
         productos_proforma = {
             product_id
             for (product_id,) in (
@@ -233,6 +244,7 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
             DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
         ).filter(
             OrdenCompra.id_proforma == payload.id_proforma,
+            func.coalesce(OrdenCompra.vinculado, 0) != 1,
         ).scalar()
 
         volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
@@ -338,27 +350,30 @@ def list_orden_compra(
     
     return create_paginated_response(items, page, page_size, total_items)
 
-
-@router.get("/search", response_model=PaginatedOrdenCompraResponse, summary='Buscar Órdenes de Compra', description='Buscar órdenes de compra por N° OC, N° proforma, N° OE, proveedor o usuario encargado.')
+@router.get(
+    "/search",
+    response_model=PaginatedOrdenCompraResponse,
+    summary="Buscar Órdenes de Compra",
+    description="Buscar órdenes de compra por coincidencia parcial de N° OC, N° proforma, N° OE, proveedor o usuario encargado.",
+)
 def search_orden_compra(
-    id_orden_compra: Optional[int] = Query(None, description="Filtrar por N° de orden de compra"),
+    query: Optional[str] = Query(None, description="Búsqueda parcial por N° OC"),
+    id_orden_compra: Optional[int] = Query(None, description="Filtrar por N° exacto de orden de compra"),
     id_proforma: Optional[int] = Query(None, description="Filtrar por N° de proforma"),
     id_operacion_exportacion: Optional[int] = Query(None, description="Filtrar por N° de operación de exportación"),
-    proveedor: Optional[str] = Query(None, description="Buscar por razón social del proveedor (búsqueda parcial)"),
-    usuario_encargado: Optional[str] = Query(None, description="Buscar por nombre del usuario encargado (búsqueda parcial)"),
+    proveedor: Optional[str] = Query(None, description="Buscar por razón social del proveedor"),
+    usuario_encargado: Optional[str] = Query(None, description="Buscar por nombre del usuario encargado"),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     skip = (page - 1) * page_size
 
-    # Subconsulta para volumen total por OC
     volumen_sub = db.query(
         DetalleOrdenCompra.id_orden_compra,
         func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, 0)).label("vol_total")
     ).group_by(DetalleOrdenCompra.id_orden_compra).subquery()
 
-    # Consulta base con todos los joins
     base_query = db.query(
         OrdenCompra,
         func.coalesce(volumen_sub.c.vol_total, 0).label("volumenTotal"),
@@ -368,38 +383,67 @@ def search_orden_compra(
         Bodega.nombre.label("bodega_nombre"),
         Empresa.nombre_fantasia.label("empresa_nombre"),
         EstadoOdc.nombre.label("estado_nombre"),
-        OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion")
-    ).outerjoin(volumen_sub, OrdenCompra.id_orden_compra == volumen_sub.c.id_orden_compra)\
-     .outerjoin(ClienteProveedor, OrdenCompra.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)\
-     .outerjoin(User, OrdenCompra.id_usuario_encargado == User.id_usuario)\
-     .outerjoin(Moneda, OrdenCompra.id_moneda == Moneda.id_moneda)\
-     .outerjoin(Bodega, OrdenCompra.id_bodega == Bodega.id_bodega)\
-     .outerjoin(Empresa, OrdenCompra.id_empresa == Empresa.id_empresa)\
-     .outerjoin(EstadoOdc, OrdenCompra.id_estado_odc == EstadoOdc.id_estado_odc)\
-     .outerjoin(Proforma, OrdenCompra.id_proforma == Proforma.id_proforma)\
-     .outerjoin(OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion)
+        OperacionExportacion.id_operacion_exportacion.label("id_operacion_exportacion"),
+    ).outerjoin(
+        volumen_sub, OrdenCompra.id_orden_compra == volumen_sub.c.id_orden_compra
+    ).outerjoin(
+        ClienteProveedor, OrdenCompra.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor
+    ).outerjoin(
+        User, OrdenCompra.id_usuario_encargado == User.id_usuario
+    ).outerjoin(
+        Moneda, OrdenCompra.id_moneda == Moneda.id_moneda
+    ).outerjoin(
+        Bodega, OrdenCompra.id_bodega == Bodega.id_bodega
+    ).outerjoin(
+        Empresa, OrdenCompra.id_empresa == Empresa.id_empresa
+    ).outerjoin(
+        EstadoOdc, OrdenCompra.id_estado_odc == EstadoOdc.id_estado_odc
+    ).outerjoin(
+        Proforma, OrdenCompra.id_proforma == Proforma.id_proforma
+    ).outerjoin(
+        OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion
+    )
 
-    # Aplicar filtros
-    if id_orden_compra is not None:
-        base_query = base_query.filter(OrdenCompra.id_orden_compra == id_orden_compra)
+    if query:
+        base_query = base_query.filter(
+            cast(OrdenCompra.id_orden_compra, String).ilike(f"%{query}%")
+        )
+    elif id_orden_compra is not None:
+        base_query = base_query.filter(
+            OrdenCompra.id_orden_compra == id_orden_compra
+        )
+
     if id_proforma is not None:
         base_query = base_query.filter(OrdenCompra.id_proforma == id_proforma)
+
     if id_operacion_exportacion is not None:
-        base_query = base_query.filter(OperacionExportacion.id_operacion_exportacion == id_operacion_exportacion)
+        base_query = base_query.filter(
+            OperacionExportacion.id_operacion_exportacion == id_operacion_exportacion
+        )
+
     if proveedor is not None:
-        base_query = base_query.filter(ClienteProveedor.razon_social.ilike(f"%{proveedor}%"))
+        base_query = base_query.filter(
+            ClienteProveedor.razon_social.ilike(f"%{proveedor}%")
+        )
+
     if usuario_encargado is not None:
-        base_query = base_query.filter(User.nombre.ilike(f"%{usuario_encargado}%"))
+        base_query = base_query.filter(
+            User.nombre.ilike(f"%{usuario_encargado}%")
+        )
 
     total_items = base_query.count()
 
     results = base_query.order_by(desc(OrdenCompra.id_orden_compra))\
-                        .offset(skip).limit(page_size).all()
+        .offset(skip)\
+        .limit(page_size)\
+        .all()
 
     items = []
     for row in results:
         oc = row[0]
         item_dict = oc.__dict__.copy()
+        item_dict.pop("_sa_instance_state", None)
+
         item_dict.update({
             "volumenTotal": _round_volume(row.volumenTotal),
             "proveedor_nombre": row.proveedor_nombre,
@@ -410,6 +454,7 @@ def search_orden_compra(
             "estado_nombre": row.estado_nombre,
             "id_operacion_exportacion": row.id_operacion_exportacion,
         })
+
         items.append(item_dict)
 
     return create_paginated_response(items, page, page_size, total_items)
@@ -551,11 +596,20 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
 
     payload_data = payload.model_dump(exclude_unset=True)
 
+    nuevo_id_proforma = payload_data.get("id_proforma", item.id_proforma)
+    nuevo_vinculado = payload_data.get("vinculado", item.vinculado)
+    es_oc_directa = _is_directa(nuevo_vinculado)
+
     if "id_proforma" in payload_data:
-        nuevo_id_proforma = payload_data.get("id_proforma")
         if nuevo_id_proforma is not None and nuevo_id_proforma != item.id_proforma:
-            _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
-            _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
+            if not es_oc_directa:
+                _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
+                _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
+
+    # Si cambia de directa a normal manteniendo proforma, validar al vuelo.
+    if "vinculado" in payload_data and not es_oc_directa and nuevo_id_proforma is not None:
+        _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
+        _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
 
     for k, v in payload_data.items():
         setattr(item, k, v)

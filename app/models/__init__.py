@@ -39,6 +39,9 @@ from .pais import Pais
 from .parametro import Parametro
 from .plc import Plc
 from .ple import Ple
+from .packinglist import PackingList
+from .packinglist_guia import PackingListGuia
+from .packinglist_detalle import PackingListDetalle
 from .producto import Producto
 from .proforma import Proforma
 from .puerto import Puerto
@@ -90,6 +93,9 @@ __all__ = [
     "Parametro",
     "Plc",
     "Ple",
+    "PackingList",
+    "PackingListGuia",
+    "PackingListDetalle",
     "Producto",
     "Proforma",
     "Puerto",

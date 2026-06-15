@@ -37,6 +37,7 @@ pillow==12.1.0
 pipenv==2025.0.4
 platformdirs==4.5.0
 psycopg2-binary==2.9.11
+openpyxl==3.1.5
 pycparser==3.0
 pydantic==2.12.5
 pydantic-settings==2.12.0

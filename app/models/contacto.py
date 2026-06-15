@@ -32,6 +32,14 @@ class Contacto(Base):
         passive_deletes=False,
     )
 
+    ContactosOrdenServicio = relationship(
+        "ContactoOrdenServicio",
+        back_populates="Contacto",
+        lazy="dynamic",
+        cascade=None,
+        passive_deletes=False,
+    )
+
     def to_dict(self):
         return {
             "id_contacto": self.id_contacto,

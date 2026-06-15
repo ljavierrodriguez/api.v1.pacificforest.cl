@@ -1598,6 +1598,83 @@ class OrdenCompraPDFGenerator(ProformaPDFGenerator):
 
 
 class OrdenServicioPDFGenerator(OrdenCompraPDFGenerator):
+    def _client_block(self, orden_servicio: OrdenServicio, contactos_html: str | None):
+        cp = orden_servicio.ClienteProveedor
+        nombre = "-"
+        rut = "-"
+        if cp:
+            nombre = cp.razon_social or cp.nombre_fantasia or "-"
+            rut = cp.rut or "-"
+
+        direccion_txt = "-"
+        pais_ciudad = "-"
+        if getattr(orden_servicio, "DireccionProveedor", None):
+            d = orden_servicio.DireccionProveedor
+            direccion_txt = d.direccion or "-"
+            ciudad = d.Ciudad.nombre if d.Ciudad else None
+            pais = d.Ciudad.Pais.nombre if d.Ciudad and d.Ciudad.Pais else None
+            pais_ciudad = f"{pais or '-'} / {ciudad or '-'}"
+
+        fecha_entrega = self._format_date(orden_servicio.fecha_entrega)
+        destino = orden_servicio.destino or "-"
+
+        data = [
+            [
+                Paragraph(self.t("CLIENT"), self.styles["SmallBoxBold"]),
+                Paragraph(f"<b>{nombre}</b>", self.styles["SmallBox"]),
+            ],
+            [
+                Paragraph(self.t("RUT"), self.styles["SmallBoxBold"]),
+                Paragraph(rut, self.styles["SmallBox"]),
+            ],
+            [
+                Paragraph(self.t("ADDRESS"), self.styles["SmallBoxBold"]),
+                Paragraph(direccion_txt, self.styles["SmallBox"]),
+            ],
+        ]
+
+        if contactos_html:
+            data.append([
+                Paragraph(self.t("CONTACTS"), self.styles["SmallBoxBold"]),
+                Paragraph(contactos_html, self.styles["SmallBox"]),
+            ])
+
+        data += [
+            [
+                Paragraph(self.t("DELIVERY_DATE"), self.styles["SmallBoxBold"]),
+                Paragraph(fecha_entrega, self.styles["SmallBox"]),
+            ],
+            [
+                Paragraph(self.t("COUNTRY_CITY"), self.styles["SmallBoxBold"]),
+                Paragraph(pais_ciudad, self.styles["SmallBox"]),
+            ],
+            [
+                Paragraph(self.t("DESTINATION"), self.styles["SmallBoxBold"]),
+                Paragraph(destino, self.styles["SmallBox"]),
+            ],
+        ]
+
+        t = Table(data, colWidths=[1.15 * inch, 5.80 * inch])
+        t.setStyle(
+            TableStyle(
+                [
+                    ("INNERGRID", (0, 0), (-1, -1), 0.5, self.grid_grey),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ]
+            )
+        )
+
+        return RoundedContainer(
+            t,
+            padding=4,
+            radius=10,
+            stroke_color=self.border_grey,
+            stroke_width=1,
+        )
     """Genera PDFs de Orden de Servicio con el mismo diseño que Orden de Compra."""
 
     def __init__(self, language: str = "es"):
@@ -1619,8 +1696,39 @@ class OrdenServicioPDFGenerator(OrdenCompraPDFGenerator):
         return left
 
     def _get_odc_contactos(self, orden_servicio: OrdenServicio, db: Session):
-        # La primera version no incluye modulo de contactos para orden de servicio.
-        return None, None
+        contacto_phone = None
+        contactos = []
+
+        from app.models.contacto import Contacto
+        from app.models.contacto_orden_servicio import ContactoOrdenServicio
+
+        odc_contacts = (
+            db.query(Contacto)
+            .join(
+                ContactoOrdenServicio,
+                ContactoOrdenServicio.id_contacto == Contacto.id_contacto,
+            )
+            .filter(ContactoOrdenServicio.id_orden_servicio == orden_servicio.id_orden_servicio)
+            .all()
+        )
+
+        for c in odc_contacts:
+            if not c:
+                continue
+            parts = []
+            if c.nombre:
+                parts.append(c.nombre)
+            if c.telefono:
+                parts.append(c.telefono)
+                if not contacto_phone:
+                    contacto_phone = c.telefono
+            if c.correo:
+                parts.append(c.correo)
+            if parts:
+                contactos.append(" - ".join(parts))
+
+        contactos_html = "<br/>".join(contactos) if contactos else None
+        return contactos_html, contacto_phone
 
     def _odc_products_table(self, orden_servicio: OrdenServicio, db: Session):
         details = (

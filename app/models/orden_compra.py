@@ -38,6 +38,9 @@ class OrdenCompra(Base):
     id_direccion_proveedor = Column(Integer, ForeignKey("direccion.id_direccion"), nullable=False)
     vinculado              = Column(Integer)  # mismo tipo que en Yii
 
+   
+
+
     # ===== Relaciones (mismos nombres que en Yii) =====
     ContactosOrdenCompra = relationship(
         "ContactoOrdenCompra",
@@ -73,6 +76,14 @@ class OrdenCompra(Base):
     foreign_keys=[id_cliente_proveedor],   # ← evita ambigüedad y asegura el mapeo
     )
    
+
+    packing_list = relationship(
+    "PackingList",
+    back_populates="orden_compra",
+    uselist=False,
+    cascade="all, delete-orphan",
+    )
+    
     Usuario   = relationship("User", foreign_keys=[id_usuario])
     UsuarioEncargado = relationship("User", foreign_keys=[id_usuario_encargado])
     Empresa   = relationship("Empresa")
