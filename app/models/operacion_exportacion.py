@@ -135,11 +135,18 @@ def _oe_before_update(mapper, connection, target: OperacionExportacion):
     if not sess:
         return
 
-    old = sess.get(OperacionExportacion, target.id_operacion_exportacion)
-    if not old:
-        return
+    from sqlalchemy import inspect
+    insp = inspect(target)
+
+    # Verificar si los campos de clientes cambiaron
+    facturar_a_changed = insp.attrs.facturar_a.history.has_changes()
+    consignar_a_changed = insp.attrs.consignar_a.history.has_changes()
+    notificar_a_changed = insp.attrs.notificar_a.history.has_changes()
 
     target.fecha = _to_date(target.fecha)
+
+    if not (facturar_a_changed or consignar_a_changed or notificar_a_changed):
+        return
 
     proforma = sess.query(Proforma).filter_by(
         id_operacion_exportacion=target.id_operacion_exportacion
@@ -156,21 +163,41 @@ def _oe_before_update(mapper, connection, target: OperacionExportacion):
             por_defecto=True
         ).order_by(Direccion.id_direccion).limit(1).scalar()
 
+    from sqlalchemy.orm.attributes import set_committed_value
+
     # Si cambia facturar_a → borrar contactos del proforma y actualizar dir por defecto
-    if old.facturar_a != target.facturar_a:
-        sess.query(ContactoProforma).filter_by(id_proforma=proforma.id_proforma).delete(synchronize_session=False)
+    if facturar_a_changed:
+        connection.execute(
+            ContactoProforma.__table__.delete()
+            .where(ContactoProforma.__table__.c.id_proforma == proforma.id_proforma)
+        )
         dir_id = _dir_defecto(target.facturar_a)
         if dir_id:
-            proforma.id_direccion_facturar = dir_id
+            connection.execute(
+                Proforma.__table__.update()
+                .where(Proforma.__table__.c.id_proforma == proforma.id_proforma)
+                .values(id_direccion_facturar=dir_id)
+            )
+            set_committed_value(proforma, "id_direccion_facturar", dir_id)
 
     # consignar_a
-    if old.consignar_a != target.consignar_a:
+    if consignar_a_changed:
         dir_id = _dir_defecto(target.consignar_a)
         if dir_id:
-            proforma.id_direccion_consignar = dir_id
+            connection.execute(
+                Proforma.__table__.update()
+                .where(Proforma.__table__.c.id_proforma == proforma.id_proforma)
+                .values(id_direccion_consignar=dir_id)
+            )
+            set_committed_value(proforma, "id_direccion_consignar", dir_id)
 
     # notificar_a
-    if old.notificar_a != target.notificar_a:
+    if notificar_a_changed:
         dir_id = _dir_defecto(target.notificar_a)
         if dir_id:
-            proforma.id_direccion_notificar = dir_id
+            connection.execute(
+                Proforma.__table__.update()
+                .where(Proforma.__table__.c.id_proforma == proforma.id_proforma)
+                .values(id_direccion_notificar=dir_id)
+            )
+            set_committed_value(proforma, "id_direccion_notificar", dir_id)
