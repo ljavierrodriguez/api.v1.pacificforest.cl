@@ -4,6 +4,7 @@ Test completo para crear una proforma con detalle_proforma y verificar
 que los nuevos campos de especie y clase se incluyen correctamente.
 """
 
+import app.main
 import json
 from datetime import date
 from sqlalchemy.orm import Session
@@ -45,10 +46,11 @@ def create_test_data(db: Session):
         id_empresa=999,
         nombre_fantasia="EMPRESA TEST",
         razon_social="EMPRESA TEST LTDA",
-        rut="12345678-9",
+        rut="12.345.678-9",
         direccion="DIRECCION TEST 123",
         giro="COMERCIO",
-        id_ciudad=ciudad.id_ciudad
+        id_ciudad=ciudad.id_ciudad,
+        url_logo=""
     )
     db.add(empresa)
     db.flush()

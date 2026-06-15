@@ -140,8 +140,10 @@ def list_proforma(
         OrdenCompra.id_proforma,
     ).subquery()
 
-    # Alias para joins de direcciones (facturar) y datos de OE
+    # Alias para joins de direcciones (facturar, consignar, notificar) y datos de OE
     DirFacturar = aliased(Direccion)
+    DirConsignar = aliased(Direccion)
+    DirNotificar = aliased(Direccion)
     CPFacturar = aliased(ClienteProveedor)
     CPConsignar = aliased(ClienteProveedor)
     CPNotificar = aliased(ClienteProveedor)
@@ -164,9 +166,9 @@ def list_proforma(
         CPFacturar.razon_social.label("facturar_a_nombre"),
         CPConsignar.razon_social.label("consignar_a_nombre"),
         CPNotificar.razon_social.label("notificar_a_nombre"),
-        DirFacturar.id_cliente_proveedor.label("facturar_a"),
-        OE.consignar_a.label("consignar_a"),
-        OE.notificar_a.label("notificar_a"),
+        func.coalesce(DirFacturar.id_cliente_proveedor, OE.facturar_a).label("facturar_a"),
+        func.coalesce(DirConsignar.id_cliente_proveedor, OE.consignar_a).label("consignar_a"),
+        func.coalesce(DirNotificar.id_cliente_proveedor, OE.notificar_a).label("notificar_a"),
         PuertoOrigenAlias.nombre.label("puerto_origen_nombre"),
         PuertoDestinoAlias.nombre.label("puerto_destino_nombre"),
         OE.id_puerto_origen.label("id_puerto_origen"),
@@ -187,9 +189,11 @@ def list_proforma(
      .outerjoin(OE, Proforma.id_operacion_exportacion == OE.id_operacion_exportacion)\
     .outerjoin(FormaPago, OE.id_forma_pago == FormaPago.id_forma_pago)\
      .outerjoin(DirFacturar, Proforma.id_direccion_facturar == DirFacturar.id_direccion)\
-     .outerjoin(CPFacturar, DirFacturar.id_cliente_proveedor == CPFacturar.id_cliente_proveedor)\
-     .outerjoin(CPConsignar, OE.consignar_a == CPConsignar.id_cliente_proveedor)\
-     .outerjoin(CPNotificar, OE.notificar_a == CPNotificar.id_cliente_proveedor)\
+     .outerjoin(DirConsignar, Proforma.id_direccion_consignar == DirConsignar.id_direccion)\
+     .outerjoin(DirNotificar, Proforma.id_direccion_notificar == DirNotificar.id_direccion)\
+     .outerjoin(CPFacturar, func.coalesce(DirFacturar.id_cliente_proveedor, OE.facturar_a) == CPFacturar.id_cliente_proveedor)\
+     .outerjoin(CPConsignar, func.coalesce(DirConsignar.id_cliente_proveedor, OE.consignar_a) == CPConsignar.id_cliente_proveedor)\
+     .outerjoin(CPNotificar, func.coalesce(DirNotificar.id_cliente_proveedor, OE.notificar_a) == CPNotificar.id_cliente_proveedor)\
      .outerjoin(PuertoOrigenAlias, OE.id_puerto_origen == PuertoOrigenAlias.id_puerto)\
      .outerjoin(PuertoDestinoAlias, OE.id_puerto_destino == PuertoDestinoAlias.id_puerto)\
      .order_by(desc(Proforma.id_proforma))\
@@ -317,6 +321,8 @@ def search_proforma(
     ).subquery()
 
     DirFacturar = aliased(Direccion)
+    DirConsignar = aliased(Direccion)
+    DirNotificar = aliased(Direccion)
     CPFacturar = aliased(ClienteProveedor)
     CPConsignar = aliased(ClienteProveedor)
     CPNotificar = aliased(ClienteProveedor)
@@ -338,9 +344,9 @@ def search_proforma(
         CPFacturar.razon_social.label("facturar_a_nombre"),
         CPConsignar.razon_social.label("consignar_a_nombre"),
         CPNotificar.razon_social.label("notificar_a_nombre"),
-        DirFacturar.id_cliente_proveedor.label("facturar_a"),
-        OE.consignar_a.label("consignar_a"),
-        OE.notificar_a.label("notificar_a"),
+        func.coalesce(DirFacturar.id_cliente_proveedor, OE.facturar_a).label("facturar_a"),
+        func.coalesce(DirConsignar.id_cliente_proveedor, OE.consignar_a).label("consignar_a"),
+        func.coalesce(DirNotificar.id_cliente_proveedor, OE.notificar_a).label("notificar_a"),
         PuertoOrigenAlias.nombre.label("puerto_origen_nombre"),
         PuertoDestinoAlias.nombre.label("puerto_destino_nombre"),
         OE.id_puerto_origen.label("id_puerto_origen"),
@@ -361,9 +367,11 @@ def search_proforma(
      .outerjoin(OE, Proforma.id_operacion_exportacion == OE.id_operacion_exportacion)\
     .outerjoin(FormaPago, OE.id_forma_pago == FormaPago.id_forma_pago)\
      .outerjoin(DirFacturar, Proforma.id_direccion_facturar == DirFacturar.id_direccion)\
-     .outerjoin(CPFacturar, DirFacturar.id_cliente_proveedor == CPFacturar.id_cliente_proveedor)\
-     .outerjoin(CPConsignar, OE.consignar_a == CPConsignar.id_cliente_proveedor)\
-     .outerjoin(CPNotificar, OE.notificar_a == CPNotificar.id_cliente_proveedor)\
+     .outerjoin(DirConsignar, Proforma.id_direccion_consignar == DirConsignar.id_direccion)\
+     .outerjoin(DirNotificar, Proforma.id_direccion_notificar == DirNotificar.id_direccion)\
+     .outerjoin(CPFacturar, func.coalesce(DirFacturar.id_cliente_proveedor, OE.facturar_a) == CPFacturar.id_cliente_proveedor)\
+     .outerjoin(CPConsignar, func.coalesce(DirConsignar.id_cliente_proveedor, OE.consignar_a) == CPConsignar.id_cliente_proveedor)\
+     .outerjoin(CPNotificar, func.coalesce(DirNotificar.id_cliente_proveedor, OE.notificar_a) == CPNotificar.id_cliente_proveedor)\
      .outerjoin(PuertoOrigenAlias, OE.id_puerto_origen == PuertoOrigenAlias.id_puerto)\
      .outerjoin(PuertoDestinoAlias, OE.id_puerto_destino == PuertoDestinoAlias.id_puerto)
 
@@ -645,30 +653,30 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
         "id": item.id_proforma,
         "numero_proforma": item.id_proforma,
         "numeroProforma": item.id_proforma,
-        "facturar_a": getattr(oe, "facturar_a", None) if oe else None,
-        "consignar_a": getattr(oe, "consignar_a", None) if oe else None,
-        "notificar_a": getattr(oe, "notificar_a", None) if oe else None,
-        "id_cliente_facturar": getattr(oe, "facturar_a", None) if oe else None,
-        "id_cliente_consignar": getattr(oe, "consignar_a", None) if oe else None,
-        "id_cliente_notificar": getattr(oe, "notificar_a", None) if oe else None,
+        "facturar_a": getattr(item.DireccionFacturar, "id_cliente_proveedor", None) or (getattr(oe, "facturar_a", None) if oe else None),
+        "consignar_a": getattr(item.DireccionConsignar, "id_cliente_proveedor", None) or (getattr(oe, "consignar_a", None) if oe else None),
+        "notificar_a": getattr(item.DireccionNotificar, "id_cliente_proveedor", None) or (getattr(oe, "notificar_a", None) if oe else None),
+        "id_cliente_facturar": getattr(item.DireccionFacturar, "id_cliente_proveedor", None) or (getattr(oe, "facturar_a", None) if oe else None),
+        "id_cliente_consignar": getattr(item.DireccionConsignar, "id_cliente_proveedor", None) or (getattr(oe, "consignar_a", None) if oe else None),
+        "id_cliente_notificar": getattr(item.DireccionNotificar, "id_cliente_proveedor", None) or (getattr(oe, "notificar_a", None) if oe else None),
         "facturar_a_nombre": (
-            getattr(getattr(oe, "FacturarA", None), "razon_social", None)
-            if oe else _cliente_nombre_from_direccion(item.DireccionFacturar)
+            _cliente_nombre_from_direccion(item.DireccionFacturar)
+            or (getattr(getattr(oe, "FacturarA", None), "razon_social", None) if oe else None)
         ),
         "consignar_a_nombre": (
-            getattr(getattr(oe, "ConsignarA", None), "razon_social", None)
-            if oe else _cliente_nombre_from_direccion(item.DireccionConsignar)
+            _cliente_nombre_from_direccion(item.DireccionConsignar)
+            or (getattr(getattr(oe, "ConsignarA", None), "razon_social", None) if oe else None)
         ),
         "notificar_a_nombre": (
-            getattr(getattr(oe, "NotificarA", None), "razon_social", None)
-            if oe else _cliente_nombre_from_direccion(item.DireccionNotificar)
+            _cliente_nombre_from_direccion(item.DireccionNotificar)
+            or (getattr(getattr(oe, "NotificarA", None), "razon_social", None) if oe else None)
         ),
-        "facturar_a_id": getattr(oe, "facturar_a", None) if oe else None,
-        "consignar_a_id": getattr(oe, "consignar_a", None) if oe else None,
-        "notificar_a_id": getattr(oe, "notificar_a", None) if oe else None,
-        "facturar_a_cliente": getattr(oe, "FacturarA", None) if oe else None,
-        "consignar_a_cliente": getattr(oe, "ConsignarA", None) if oe else None,
-        "notificar_a_cliente": getattr(oe, "NotificarA", None) if oe else None,
+        "facturar_a_id": getattr(item.DireccionFacturar, "id_cliente_proveedor", None) or (getattr(oe, "facturar_a", None) if oe else None),
+        "consignar_a_id": getattr(item.DireccionConsignar, "id_cliente_proveedor", None) or (getattr(oe, "consignar_a", None) if oe else None),
+        "notificar_a_id": getattr(item.DireccionNotificar, "id_cliente_proveedor", None) or (getattr(oe, "notificar_a", None) if oe else None),
+        "facturar_a_cliente": getattr(item.DireccionFacturar, "ClienteProveedor", None) or (getattr(oe, "FacturarA", None) if oe else None),
+        "consignar_a_cliente": getattr(item.DireccionConsignar, "ClienteProveedor", None) or (getattr(oe, "ConsignarA", None) if oe else None),
+        "notificar_a_cliente": getattr(item.DireccionNotificar, "ClienteProveedor", None) or (getattr(oe, "NotificarA", None) if oe else None),
         "direccion_facturar": getattr(item, "DireccionFacturar", None),
         "direccion_consignar": getattr(item, "DireccionConsignar", None),
         "direccion_notificar": getattr(item, "DireccionNotificar", None),

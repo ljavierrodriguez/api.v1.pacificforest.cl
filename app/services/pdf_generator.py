@@ -859,16 +859,24 @@ class ProformaPDFGenerator:
         # Obtener contactos para mostrar en la sección de facturar
         contactos_html, contacto_phone = self._get_contactos(proforma, db)
 
-        # Obtener nombres de clientes desde OperacionExportacion
-        facturar_name = "-"
-        consignar_name = "-"
-        notificar_name = "-"
-        
-        if proforma.OperacionExportacion:
-            oe = proforma.OperacionExportacion
-            facturar_name = self._get_cliente_nombre(oe.FacturarA)
-            consignar_name = self._get_cliente_nombre(oe.ConsignarA)
-            notificar_name = self._get_cliente_nombre(oe.NotificarA)
+        # Obtener nombres de clientes desde Direcciones o, en su defecto, OperacionExportacion
+        def _get_cliente_nombre_from_direccion(direccion):
+            if direccion and getattr(direccion, "ClienteProveedor", None):
+                return self._get_cliente_nombre(direccion.ClienteProveedor)
+            return None
+
+        facturar_name = (
+            _get_cliente_nombre_from_direccion(proforma.DireccionFacturar)
+            or (self._get_cliente_nombre(proforma.OperacionExportacion.FacturarA) if proforma.OperacionExportacion else "-")
+        )
+        consignar_name = (
+            _get_cliente_nombre_from_direccion(proforma.DireccionConsignar)
+            or (self._get_cliente_nombre(proforma.OperacionExportacion.ConsignarA) if proforma.OperacionExportacion else "-")
+        )
+        notificar_name = (
+            _get_cliente_nombre_from_direccion(proforma.DireccionNotificar)
+            or (self._get_cliente_nombre(proforma.OperacionExportacion.NotificarA) if proforma.OperacionExportacion else "-")
+        )
 
         def _direccion_info(direccion):
             if not direccion:
