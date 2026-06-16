@@ -54,13 +54,16 @@ def _build_oe_query(db: Session):
         FacturarCP, ConsignarCP, NotificarCP, PuertoOrigen, PuertoDestino
     )
 
-
+"""
 def _rows_to_items(rows):
     items = []
     for row in rows:
         oe = row[0]
         d = oe.__dict__.copy()
         d.update({
+
+
+
             "id_proforma": row[1],
             "facturar_a_nombre": row[2],
             "consignar_a_nombre": row[3],
@@ -72,7 +75,31 @@ def _rows_to_items(rows):
         })
         items.append(d)
     return items
+"""
 
+def _rows_to_items(rows):
+    items = []
+    for row in rows:
+        oe = row[0]
+        d = oe.__dict__.copy()
+
+        id_proforma = row[1]
+
+        d.update({
+            "id_proforma": id_proforma,
+            "estadoFlujo": "con-proforma" if id_proforma else "sin-proforma",
+            "facturar_a_nombre": row[2],
+            "consignar_a_nombre": row[3],
+            "notificar_a_nombre": row[4],
+            "puerto_origen_nombre": row[5],
+            "puerto_destino_nombre": row[6],
+            "forma_pago_nombre": row[7],
+            "estado_oe_nombre": row[8],
+        })
+
+        items.append(d)
+
+    return items
 
 @router.post("/", response_model=OperacionExportacionRead, status_code=201, summary='POST Operacion Exportacion', description='Crear una nueva operación de exportación.')
 def create_operacion(payload: OperacionExportacionCreate, db: Session = Depends(get_db)):

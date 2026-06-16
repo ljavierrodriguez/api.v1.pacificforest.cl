@@ -38,6 +38,11 @@ class OperacionExportacionRead(BaseModel):
     id_estado_oe: int = Field(..., description="ID del estado de la operación")
     fecha: date = Field(..., description="Fecha de la operación")
     id_proforma: Optional[int] = Field(None, description="ID de la proforma asociada, si existe")
+    estadoFlujo: Optional[str] = Field(
+        None,
+        description="Indica si la operación tiene una proforma asociada"
+    )
+
 
     # Etiquetas de texto para evitar llamadas adicionales desde el frontend
     facturar_a_nombre: Optional[str] = Field(None, description="Razón social del cliente a facturar")
