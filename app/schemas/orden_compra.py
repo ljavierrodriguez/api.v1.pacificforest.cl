@@ -116,6 +116,7 @@ class OrdenCompraRead(BaseModel):
     estado_nombre: Optional[str] = Field(None, description="Nombre del estado")
     id_operacion_exportacion: Optional[int] = Field(None, description="ID de la operación de exportación asociada a la proforma")
     contactos_orden_compra: Optional[List[Any]] = Field(None, description="Contactos asociados a la orden de compra")
+    detalles_orden_compra: Optional[List[Any]] = Field(None, description="Detalles/productos asociados a la orden de compra")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,5 +145,6 @@ class OrdenCompraUpdate(BaseModel):
     id_estado_odc: Optional[int] = None
     id_direccion_proveedor: Optional[int] = None
     vinculado: Optional[int] = None
+    detalles: Optional[List[OrdenCompraDetalleCreate]] = None
     
     model_config = ConfigDict()

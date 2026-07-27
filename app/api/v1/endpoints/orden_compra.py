@@ -611,12 +611,31 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
         _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
         _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
 
+    detalles_data = payload_data.pop("detalles", None)
+
     for k, v in payload_data.items():
         setattr(item, k, v)
     db.add(item)
+
+    if detalles_data is not None:
+        db.query(DetalleOrdenCompra).filter(
+            DetalleOrdenCompra.id_orden_compra == item_id
+        ).delete(synchronize_session=False)
+
+        for detalle_dict in detalles_data:
+            # Remover campos sólo UI si vienen
+            detalle_dict.pop("id_especie", None)
+            detalle_dict.pop("producto_nombre", None)
+            detalle_dict.pop("unidad_venta_nombre", None)
+            detalle_obj = DetalleOrdenCompra(
+                id_orden_compra=item.id_orden_compra,
+                **detalle_dict,
+            )
+            db.add(detalle_obj)
+
     db.commit()
     db.refresh(item)
-    return item
+    return get_orden_compra(item_id, db)
 
 
 @router.post("/{item_id}/desvincular", response_model=OrdenCompraRead, summary='Desvincular OrdenCompra', description='Desvincula la orden de compra de su proforma y la deja como orden directa (solo admin).')

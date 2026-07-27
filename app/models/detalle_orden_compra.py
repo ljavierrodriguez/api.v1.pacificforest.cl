@@ -72,12 +72,42 @@ class DetalleOrdenCompra(Base):
         def _num(x):
             return float(x) if x is not None else None
 
+        prod = self.Producto
+        if not prod and self.id_producto:
+            from sqlalchemy.orm import object_session
+            sess = object_session(self)
+            if sess:
+                from app.models.producto import Producto
+                prod = sess.get(Producto, self.id_producto)
+
+        prod_nombre = None
+        id_especie = None
+        if prod:
+            prod_nombre = getattr(prod, "nombre_producto_esp", None) or getattr(prod, "nombre", None) or getattr(prod, "nombre_producto_ing", None)
+            id_especie = getattr(prod, "id_especie", None)
+
+        uv = self.UnidadVenta
+        if not uv and self.id_unidad_venta:
+            from sqlalchemy.orm import object_session
+            sess = object_session(self)
+            if sess:
+                from app.models.unidad_venta import UnidadVenta
+                uv = sess.get(UnidadVenta, self.id_unidad_venta)
+
+        uv_nombre = None
+        if uv:
+            uv_nombre = getattr(uv, "nombre", None)
+
         return {
             "id_detalle_odc": self.id_detalle_odc,
+            "id_detalle_orden_compra": self.id_detalle_odc,
             "id_orden_compra": self.id_orden_compra,
             "id_producto": self.id_producto,
+            "id_especie": id_especie,
+            "producto_nombre": prod_nombre,
             "texto_abierto": self.texto_abierto,
             "id_unidad_venta": self.id_unidad_venta,
+            "unidad_venta_nombre": uv_nombre,
             "cantidad": _num(self.cantidad),
             "espesor": self.espesor,
             "id_unidad_medida_espesor": self.id_unidad_medida_espesor,
