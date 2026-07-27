@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
 from typing import Any, Dict, List
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 import os
 import shutil
 from datetime import datetime
@@ -110,17 +111,31 @@ def create_usuario(payload: UserCreate, db: Session = Depends(get_db)):
 )
 def list_usuarios(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
+    search: str = Query(None, description="Término de búsqueda"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset
     skip = (page - 1) * page_size
     
+    query = db.query(User)
+    
+    if search:
+        search_pattern = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                User.nombre.ilike(search_pattern),
+                User.login.ilike(search_pattern),
+                User.correo.ilike(search_pattern),
+                User.rut.ilike(search_pattern)
+            )
+        )
+    
     # Obtener total de elementos
-    total_items = db.query(User).count()
+    total_items = query.count()
     
     # Obtener elementos de la página actual con las relaciones cargadas
-    items = db.query(User).options(joinedload(User.seguridades)).offset(skip).limit(page_size).all()
+    items = query.options(joinedload(User.seguridades)).offset(skip).limit(page_size).all()
     
     # Crear respuesta paginada
     return create_paginated_response([u.to_dict() for u in items], page, page_size, total_items)

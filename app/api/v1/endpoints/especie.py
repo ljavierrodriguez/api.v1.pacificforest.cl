@@ -22,7 +22,7 @@ def create_especie(payload: EspecieCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=PaginatedEspecieResponse, summary='GET Especie', description='Obtener lista de especies con paginación.')
 def list_especies(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db),
 ):
     skip = (page - 1) * page_size

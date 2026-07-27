@@ -25,7 +25,7 @@ def create_ciudad(payload: CiudadCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=PaginatedCiudadResponse, summary='GET Ciudad', description='Obtener lista de ciudades con paginación.')
 def list_ciudad(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=10000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

@@ -24,7 +24,7 @@ def create_pais(payload: PaisCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=PaginatedPaisResponse, summary='GET Pais', description='Obtener lista de países con paginación.')
 def list_paises(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=10000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

@@ -13,6 +13,7 @@ from app.schemas.cliente_proveedor import (
     ClienteProveedorDetailRead,
     ClienteProveedorRead,
     ClienteProveedorUpdate,
+    DireccionDetalleRead,
 )
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 
@@ -44,7 +45,7 @@ def create_cliente_proveedor(
 @router.get("/", response_model=PaginatedClienteProveedorResponse, summary='GET Cliente Proveedor', description='Obtener lista de clientes/proveedores con paginación.')
 def list_cliente_proveedor(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     es_cliente: Optional[bool] = Query(None, description="Filtrar por clientes"),
     es_proveedor: Optional[bool] = Query(None, description="Filtrar por proveedores"),
     db: Session = Depends(get_db)
@@ -78,7 +79,7 @@ def list_cliente_proveedor(
 def search_cliente_proveedor(
     q: str = Query(..., min_length=1, description="Texto a buscar en RUT, nombre fantasía, razón social o giro"),
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     es_cliente: Optional[bool] = Query(None, description="Filtrar por clientes"),
     es_proveedor: Optional[bool] = Query(None, description="Filtrar por proveedores"),
     db: Session = Depends(get_db)
@@ -142,6 +143,22 @@ def get_cliente_proveedor(item_id: int, db: Session = Depends(get_db)):
         "Contactos": contactos,
         "Direcciones": direcciones,
     }
+
+
+@router.get("/{id_cliente_proveedor}/direcciones", response_model=list[DireccionDetalleRead], summary='GET Direcciones de Cliente Proveedor', description='Obtiene todas las direcciones asociadas a un cliente o proveedor.')
+def get_direcciones_cliente_proveedor(id_cliente_proveedor: int, db: Session = Depends(get_db)):
+    cliente = db.get(ClienteProveedor, id_cliente_proveedor)
+    if not cliente:
+        raise HTTPException(status_code=404, detail="ClienteProveedor not found")
+
+    direcciones = (
+        db.query(Direccion)
+        .options(joinedload(Direccion.Ciudad).joinedload(Ciudad.Pais))
+        .filter(Direccion.id_cliente_proveedor == id_cliente_proveedor)
+        .order_by(Direccion.por_defecto.desc(), Direccion.direccion.asc())
+        .all()
+    )
+    return direcciones
 
 
 @router.put("/{item_id}", response_model=ClienteProveedorRead, summary='PUT Cliente Proveedor', description='PUT Cliente Proveedor endpoint. Replace this placeholder with a meaningful description.')

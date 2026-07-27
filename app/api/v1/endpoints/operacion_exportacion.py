@@ -122,7 +122,7 @@ def create_operacion(payload: OperacionExportacionCreate, db: Session = Depends(
 @router.get("/", response_model=PaginatedOperacionExportacionResponse, summary='GET Operacion Exportacion', description='Obtener lista de operaciones de exportación con paginación.')
 def list_operacion(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     skip = (page - 1) * page_size
@@ -150,7 +150,7 @@ def search_operacion(
     puerto_origen_q: str | None = Query(None, description="Buscar por puerto de origen"),
     puerto_destino_q: str | None = Query(None, description="Buscar por puerto de destino"),
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     skip = (page - 1) * page_size

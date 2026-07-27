@@ -187,7 +187,7 @@ async def create_empresa(request: Request, db: Session = Depends(get_db)):
 def list_empresa(
     request: Request,
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

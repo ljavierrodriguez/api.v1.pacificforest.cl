@@ -32,7 +32,7 @@ def create_plc(payload: PlcCreate, db: Session = Depends(get_db)):
 @router.get("/", summary='GET Plc', description='GET Plc endpoint. Replace this placeholder with a meaningful description.')
 def list_plc(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

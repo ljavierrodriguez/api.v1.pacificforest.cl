@@ -22,7 +22,7 @@ def create_clausula(payload: ClausulaVentaCreate, db: Session = Depends(get_db))
 @router.get("/", summary='GET Clausula Venta', description='Obtener lista de cláusulas de venta con paginación.')
 def list_clausula(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

@@ -172,7 +172,7 @@ def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_
 @router.get("/", summary='GET Detalle Orden Compra', description='Listar todos los detalles de orden de compra paginados.')
 def list_detalles(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     skip = (page - 1) * page_size
@@ -187,7 +187,7 @@ def list_detalles(
 def list_detalles_by_orden(
     id_orden_compra: int,
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     skip = (page - 1) * page_size

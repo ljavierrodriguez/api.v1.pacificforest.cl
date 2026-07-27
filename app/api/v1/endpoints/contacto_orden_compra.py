@@ -27,7 +27,7 @@ def create_contacto(payload: ContactoOrdenCompraCreate, db: Session = Depends(ge
 @router.get("/", summary='GET Contacto Orden Compra', description='GET Contacto Orden Compra endpoint. Permite filtrar por id_orden_compra.')
 def list_contactos(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     id_orden_compra: Optional[int] = Query(None, description="Filtrar por id_orden_compra"),
     db: Session = Depends(get_db)
 ):

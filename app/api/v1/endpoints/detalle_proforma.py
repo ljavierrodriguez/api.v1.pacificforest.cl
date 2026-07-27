@@ -73,7 +73,7 @@ def create_detalle_proforma(payload: DetalleProformaCreate, db: Session = Depend
 @router.get("/", response_model=PaginatedDetalleProformaResponse, summary='GET Detalle Proforma', description='Obtener lista de detalles de proforma con paginación.')
 def list_detalle_proforma(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

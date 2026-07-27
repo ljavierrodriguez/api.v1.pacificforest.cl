@@ -26,7 +26,7 @@ def create_contacto_proforma(payload: ContactoProformaCreate, db: Session = Depe
 @router.get("/", summary='GET Contacto Proforma', description='GET Contacto Proforma endpoint. Replace this placeholder with a meaningful description.')
 def list_contactos(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

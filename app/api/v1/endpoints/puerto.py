@@ -31,7 +31,7 @@ def create_puerto(payload: PuertoCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=PaginatedPuertoResponse, summary='GET Puerto', description='Obtener lista de puertos con paginación.')
 def list_puerto(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset
@@ -51,7 +51,7 @@ def list_puerto(
 def search_puerto(
     q: str = Query(..., min_length=1, description="Texto a buscar en nombre o descripción"),
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

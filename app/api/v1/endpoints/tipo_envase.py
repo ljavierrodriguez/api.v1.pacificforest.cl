@@ -25,7 +25,7 @@ def create_tipo_envase(payload: TipoEnvaseCreate, db: Session = Depends(get_db))
 @router.get("/", response_model=PaginatedTipoEnvaseResponse, summary='GET Tipo Envase', description='Obtener lista de tipos de envase con paginación.')
 def list_tipo_envase(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

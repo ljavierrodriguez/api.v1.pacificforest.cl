@@ -38,7 +38,7 @@ def create_contacto_orden_servicio(payload: ContactoOrdenServicioCreate, db: Ses
 @router.get("/", summary="GET Contacto Orden Servicio - Listado paginado")
 def list_contacto_orden_servicio(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     id_orden_servicio: Optional[int] = Query(None, description="Filtrar por id_orden_servicio"),
     db: Session = Depends(get_db),
 ):

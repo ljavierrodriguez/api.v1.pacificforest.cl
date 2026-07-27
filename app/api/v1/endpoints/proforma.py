@@ -88,7 +88,7 @@ def create_proforma(payload: ProformaCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=PaginatedProformaResponse, summary='GET Proforma', description='Obtener lista de proformas con paginación.')
 def list_proforma(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset
@@ -275,7 +275,7 @@ def search_proforma(
     id_usuario_encargado: Optional[int] = Query(None, description="Filtrar por ID de usuario encargado"),
     facturar_a: Optional[str] = Query(None, description="Buscar por razón social del cliente a facturar (búsqueda parcial)"),
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     skip = (page - 1) * page_size
@@ -620,7 +620,7 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
             "ordenes_servicio": os_payload_for_oc,
         })
 
-    contactos_rows = db.query(Contacto).join(
+    contactos_rows = db.query(Contacto, ContactoProforma.id_contacto_proforma).join(
         ContactoProforma,
         ContactoProforma.id_contacto == Contacto.id_contacto,
     ).filter(
@@ -628,10 +628,11 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
     ).all()
     contactos_payload = [{
         "id_contacto": c.id_contacto,
+        "id_contacto_proforma": id_cp,
         "nombre": c.nombre,
         "correo": c.correo,
         "telefono": c.telefono,
-    } for c in contactos_rows]
+    } for c, id_cp in contactos_rows]
 
     payload = {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
     payload.update({

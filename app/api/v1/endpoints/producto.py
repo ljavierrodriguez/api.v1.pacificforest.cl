@@ -28,8 +28,9 @@ def create_producto(payload: ProductoCreate, db: Session = Depends(get_db)):
 @router.get("/", summary='GET Producto', description='GET Producto endpoint. Replace this placeholder with a meaningful description.')
 def list_producto(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     id_especie: int | None = Query(None, description="Filtrar productos por especie"),
+    search: str | None = Query(None, description="Término de búsqueda"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset
@@ -38,6 +39,12 @@ def list_producto(
     base_query = db.query(Producto)
     if id_especie is not None:
         base_query = base_query.filter(Producto.id_especie == id_especie)
+    if search:
+        search_term = f"%{search}%"
+        base_query = base_query.filter(
+            (Producto.nombre_producto_esp.ilike(search_term)) |
+            (Producto.nombre_producto_ing.ilike(search_term))
+        )
     
     # Obtener total de elementos
     total_items = base_query.count()

@@ -26,7 +26,7 @@ def create_detalle(payload: DetalleGastoCreate, db: Session = Depends(get_db)):
 @router.get("/", summary='GET Detalle Gasto', description='GET Detalle Gasto endpoint. Replace this placeholder with a meaningful description.')
 def list_detalles(
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
 ):
     # Calcular offset

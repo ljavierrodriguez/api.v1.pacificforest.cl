@@ -222,7 +222,7 @@ def create_orden_servicio(payload: OrdenServicioCreate, db: Session = Depends(ge
 def list_orden_servicio(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    page_size: int = Query(10, ge=1, le=1000),
 ):
     skip = (page - 1) * page_size
 
@@ -275,7 +275,7 @@ def search_orden_servicio(
     proveedor: Optional[str] = Query(None),
     usuario_encargado: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    page_size: int = Query(10, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
     skip = (page - 1) * page_size
