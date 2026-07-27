@@ -30,6 +30,7 @@ from .factura import Factura
 from .forma_pago import FormaPago
 from .gasto import Gasto
 from .ide import Ide
+from .inventario_transitorio import InventarioTransitorio
 from .moneda import Moneda
 from .naviera import Naviera
 from .operacion_exportacion import OperacionExportacion
@@ -84,6 +85,7 @@ __all__ = [
     "FormaPago",
     "Gasto",
     "Ide",
+    "InventarioTransitorio",
     "Moneda",
     "Naviera",
     "OperacionExportacion",
