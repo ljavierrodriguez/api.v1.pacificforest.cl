@@ -33,6 +33,7 @@ from .forma_pago import router as forma_pago_router
 from .gasto import router as gasto_router
 from .ide import router as ide_router
 from .inventario_transitorio import router as inventario_transitorio_router
+from .inventario_puerto import router as inventario_puerto_router
 from .moneda import router as moneda_router
 from .naviera import router as naviera_router
 from .operacion_exportacion import router as operacion_exportacion_router
@@ -88,6 +89,7 @@ router.include_router(forma_pago_router)
 router.include_router(gasto_router)
 router.include_router(ide_router)
 router.include_router(inventario_transitorio_router)
+router.include_router(inventario_puerto_router)
 router.include_router(moneda_router)
 router.include_router(naviera_router)
 router.include_router(operacion_exportacion_router)
