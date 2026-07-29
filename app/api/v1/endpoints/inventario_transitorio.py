@@ -35,7 +35,16 @@ def get_inventario_transitorio(
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
     db: Session = Depends(get_db),
 ):
-    query = db.query(InventarioTransitorio)
+    from app.models.producto import Producto
+    from app.models.bodega import Bodega
+    from app.models.cliente_proveedor import ClienteProveedor
+    from sqlalchemy import cast, String
+
+    query = db.query(InventarioTransitorio)\
+        .outerjoin(Producto, InventarioTransitorio.id_producto == Producto.id_producto)\
+        .outerjoin(Bodega, InventarioTransitorio.id_bodega == Bodega.id_bodega)\
+        .outerjoin(OrdenCompra, InventarioTransitorio.id_orden_compra == OrdenCompra.id_orden_compra)\
+        .outerjoin(ClienteProveedor, OrdenCompra.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)
 
     if id_orden_compra:
         query = query.filter(InventarioTransitorio.id_orden_compra == id_orden_compra)
@@ -47,22 +56,20 @@ def get_inventario_transitorio(
         query = query.filter(InventarioTransitorio.estado.ilike(f"%{estado}%"))
 
     if search and search.strip():
-        s = search.strip()
-        if s.isdigit():
-            query = query.filter(
-                or_(
-                    InventarioTransitorio.id_inventario_transitorio == int(s),
-                    InventarioTransitorio.id_orden_compra == int(s),
-                )
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                cast(InventarioTransitorio.id_inventario_transitorio, String).ilike(s),
+                cast(InventarioTransitorio.id_orden_compra, String).ilike(s),
+                InventarioTransitorio.texto_abierto.ilike(s),
+                InventarioTransitorio.observaciones.ilike(s),
+                InventarioTransitorio.estado.ilike(s),
+                Producto.nombre_producto_esp.ilike(s),
+                Bodega.nombre.ilike(s),
+                ClienteProveedor.razon_social.ilike(s),
+                ClienteProveedor.nombre_fantasia.ilike(s),
             )
-        else:
-            query = query.filter(
-                or_(
-                    InventarioTransitorio.texto_abierto.ilike(f"%{s}%"),
-                    InventarioTransitorio.observaciones.ilike(f"%{s}%"),
-                    InventarioTransitorio.estado.ilike(f"%{s}%"),
-                )
-            )
+        )
 
     total_items = query.count()
     total_pages = max(1, (total_items + page_size - 1) // page_size)

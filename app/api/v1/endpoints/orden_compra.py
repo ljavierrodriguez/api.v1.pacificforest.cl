@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, cast, String, or_
 from typing import List, Optional
-from sqlalchemy import cast, String
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 import shutil
@@ -405,8 +404,18 @@ def search_orden_compra(
     )
 
     if query:
+        search_term = f"%{query.strip()}%"
         base_query = base_query.filter(
-            cast(OrdenCompra.id_orden_compra, String).ilike(f"%{query}%")
+            or_(
+                cast(OrdenCompra.id_orden_compra, String).ilike(search_term),
+                cast(OrdenCompra.id_proforma, String).ilike(search_term),
+                ClienteProveedor.razon_social.ilike(search_term),
+                ClienteProveedor.nombre_fantasia.ilike(search_term),
+                User.nombre.ilike(search_term),
+                EstadoOdc.nombre.ilike(search_term),
+                Bodega.nombre.ilike(search_term),
+                Empresa.nombre_fantasia.ilike(search_term),
+            )
         )
     elif id_orden_compra is not None:
         base_query = base_query.filter(

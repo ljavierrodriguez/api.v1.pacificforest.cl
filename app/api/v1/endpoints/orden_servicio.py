@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from app.models.detalle_orden_servicio import DetalleOrdenServicio
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, cast, String, or_
 from typing import Optional
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
@@ -274,6 +274,7 @@ def search_orden_servicio(
     id_orden_servicio: Optional[int] = Query(None),
     proveedor: Optional[str] = Query(None),
     usuario_encargado: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=1000),
     db: Session = Depends(get_db),
@@ -300,11 +301,25 @@ def search_orden_servicio(
      .outerjoin(Empresa, OrdenServicio.id_empresa == Empresa.id_empresa)\
      .outerjoin(EstadoOrdenServicio, OrdenServicio.id_estado_orden_servicio == EstadoOrdenServicio.id_estado_orden_servicio)
 
-    if id_orden_servicio is not None:
+    search_term = q or proveedor
+    if search_term and search_term.strip():
+        st = f"%{search_term.strip()}%"
+        base_query = base_query.filter(
+            or_(
+                cast(OrdenServicio.id_orden_servicio, String).ilike(st),
+                OrdenServicio.servicio.ilike(st),
+                OrdenServicio.destino.ilike(st),
+                ClienteProveedor.razon_social.ilike(st),
+                ClienteProveedor.nombre_fantasia.ilike(st),
+                User.nombre.ilike(st),
+                EstadoOrdenServicio.nombre.ilike(st),
+                Empresa.nombre_fantasia.ilike(st),
+            )
+        )
+    elif id_orden_servicio is not None:
         base_query = base_query.filter(OrdenServicio.id_orden_servicio == id_orden_servicio)
-    if proveedor is not None:
-        base_query = base_query.filter(ClienteProveedor.razon_social.ilike(f"%{proveedor}%"))
-    if usuario_encargado is not None:
+
+    if usuario_encargado is not None and not search_term:
         base_query = base_query.filter(User.nombre.ilike(f"%{usuario_encargado}%"))
 
     total_items = base_query.count()

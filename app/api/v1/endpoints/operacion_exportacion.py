@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, or_, cast, String
 from typing import List
 
 from app.db.session import get_db
@@ -167,6 +167,7 @@ def search_operacion(
     if search_global:
         base_query = base_query.filter(
             or_(
+                cast(OperacionExportacion.id_operacion_exportacion, String).ilike(search_global),
                 FacturarCP.nombre_fantasia.ilike(search_global),
                 FacturarCP.razon_social.ilike(search_global),
                 ConsignarCP.nombre_fantasia.ilike(search_global),
@@ -175,6 +176,8 @@ def search_operacion(
                 NotificarCP.razon_social.ilike(search_global),
                 PuertoOrigen.nombre.ilike(search_global),
                 PuertoDestino.nombre.ilike(search_global),
+                EstadoOe.nombre.ilike(search_global),
+                FormaPago.nombre.ilike(search_global),
             )
         )
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import desc, func, select, literal_column, cast, Numeric, String, case
+from sqlalchemy import desc, func, select, literal_column, cast, Numeric, String, case, or_
 from typing import List, Optional
 from io import BytesIO
 import os
@@ -274,6 +274,7 @@ def search_proforma(
     id_operacion_exportacion: Optional[int] = Query(None, description="Filtrar por ID de operación de exportación"),
     id_usuario_encargado: Optional[int] = Query(None, description="Filtrar por ID de usuario encargado"),
     facturar_a: Optional[str] = Query(None, description="Buscar por razón social del cliente a facturar (búsqueda parcial)"),
+    q: Optional[str] = Query(None, description="Búsqueda global por texto o ID"),
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
@@ -375,15 +376,33 @@ def search_proforma(
      .outerjoin(PuertoOrigenAlias, OE.id_puerto_origen == PuertoOrigenAlias.id_puerto)\
      .outerjoin(PuertoDestinoAlias, OE.id_puerto_destino == PuertoDestinoAlias.id_puerto)
 
-    # Aplicar filtros
-    if id_proforma is not None:
-        base_query = base_query.filter(Proforma.id_proforma == id_proforma)
-    if id_operacion_exportacion is not None:
-        base_query = base_query.filter(Proforma.id_operacion_exportacion == id_operacion_exportacion)
-    if id_usuario_encargado is not None:
-        base_query = base_query.filter(Proforma.id_usuario_encargado == id_usuario_encargado)
-    if facturar_a is not None:
-        base_query = base_query.filter(CPFacturar.razon_social.ilike(f"%{facturar_a}%"))
+    search_term = q or facturar_a
+    if search_term and search_term.strip():
+        st = f"%{search_term.strip()}%"
+        base_query = base_query.filter(
+            or_(
+                cast(Proforma.id_proforma, String).ilike(st),
+                cast(Proforma.id_operacion_exportacion, String).ilike(st),
+                CPFacturar.razon_social.ilike(st),
+                CPFacturar.nombre_fantasia.ilike(st),
+                CPConsignar.razon_social.ilike(st),
+                CPConsignar.nombre_fantasia.ilike(st),
+                CPNotificar.razon_social.ilike(st),
+                CPNotificar.nombre_fantasia.ilike(st),
+                EstadoProforma.nombre.ilike(st),
+                User.nombre.ilike(st),
+                Empresa.nombre_fantasia.ilike(st),
+                PuertoOrigenAlias.nombre.ilike(st),
+                PuertoDestinoAlias.nombre.ilike(st),
+            )
+        )
+    else:
+        if id_proforma is not None:
+            base_query = base_query.filter(Proforma.id_proforma == id_proforma)
+        if id_operacion_exportacion is not None:
+            base_query = base_query.filter(Proforma.id_operacion_exportacion == id_operacion_exportacion)
+        if id_usuario_encargado is not None:
+            base_query = base_query.filter(Proforma.id_usuario_encargado == id_usuario_encargado)
 
     total_items = base_query.count()
 

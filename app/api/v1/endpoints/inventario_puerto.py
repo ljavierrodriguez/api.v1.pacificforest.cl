@@ -35,7 +35,16 @@ def get_inventario_puerto(
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
     db: Session = Depends(get_db),
 ):
-    query = db.query(InventarioPuerto)
+    from app.models.producto import Producto
+    from app.models.bodega import Bodega
+    from app.models.cliente_proveedor import ClienteProveedor
+    from sqlalchemy import cast, String
+
+    query = db.query(InventarioPuerto)\
+        .outerjoin(Producto, InventarioPuerto.id_producto == Producto.id_producto)\
+        .outerjoin(Bodega, InventarioPuerto.id_bodega == Bodega.id_bodega)\
+        .outerjoin(OrdenServicio, InventarioPuerto.id_orden_servicio == OrdenServicio.id_orden_servicio)\
+        .outerjoin(ClienteProveedor, OrdenServicio.id_cliente_proveedor == ClienteProveedor.id_cliente_proveedor)
 
     if id_orden_servicio:
         query = query.filter(InventarioPuerto.id_orden_servicio == id_orden_servicio)
@@ -47,22 +56,20 @@ def get_inventario_puerto(
         query = query.filter(InventarioPuerto.estado.ilike(f"%{estado}%"))
 
     if search and search.strip():
-        s = search.strip()
-        if s.isdigit():
-            query = query.filter(
-                or_(
-                    InventarioPuerto.id_inventario_puerto == int(s),
-                    InventarioPuerto.id_orden_servicio == int(s),
-                )
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                cast(InventarioPuerto.id_inventario_puerto, String).ilike(s),
+                cast(InventarioPuerto.id_orden_servicio, String).ilike(s),
+                InventarioPuerto.texto_abierto.ilike(s),
+                InventarioPuerto.observaciones.ilike(s),
+                InventarioPuerto.estado.ilike(s),
+                Producto.nombre_producto_esp.ilike(s),
+                Bodega.nombre.ilike(s),
+                ClienteProveedor.razon_social.ilike(s),
+                ClienteProveedor.nombre_fantasia.ilike(s),
             )
-        else:
-            query = query.filter(
-                or_(
-                    InventarioPuerto.texto_abierto.ilike(f"%{s}%"),
-                    InventarioPuerto.observaciones.ilike(f"%{s}%"),
-                    InventarioPuerto.estado.ilike(f"%{s}%"),
-                )
-            )
+        )
 
     total_items = query.count()
     total_pages = max(1, (total_items + page_size - 1) // page_size)
