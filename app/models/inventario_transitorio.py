@@ -36,6 +36,7 @@ class InventarioTransitorio(Base):
     piezas = Column(Numeric(12, 3), nullable=True)
 
     fecha_recepcion = Column(Date, default=date.today)
+    numero_guia = Column(String(100), nullable=True)
     observaciones = Column(String(500), nullable=True)
     estado = Column(String(50), default="RECIBIDO")
 
@@ -146,6 +147,7 @@ class InventarioTransitorio(Base):
             "precio_eq": _num(self.precio_eq),
             "piezas": _num(self.piezas),
             "fecha_recepcion": self.fecha_recepcion.isoformat() if self.fecha_recepcion else None,
+            "numero_guia": self.numero_guia,
             "observaciones": self.observaciones,
             "estado": self.estado,
         }

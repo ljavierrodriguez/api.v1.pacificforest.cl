@@ -25,6 +25,7 @@ class InventarioTransitorioBase(BaseModel):
     precio_eq: Optional[Decimal] = None
     piezas: Optional[Decimal] = None
     fecha_recepcion: Optional[date] = None
+    numero_guia: Optional[str] = Field(None, max_length=100)
     observaciones: Optional[str] = Field(None, max_length=500)
     estado: Optional[str] = Field("RECIBIDO", max_length=50)
 
@@ -54,6 +55,7 @@ class InventarioTransitorioUpdate(BaseModel):
     precio_eq: Optional[Decimal] = None
     piezas: Optional[Decimal] = None
     fecha_recepcion: Optional[date] = None
+    numero_guia: Optional[str] = None
     observaciones: Optional[str] = None
     estado: Optional[str] = None
 
@@ -61,19 +63,34 @@ class InventarioTransitorioUpdate(BaseModel):
 class RecepcionarItemPayload(BaseModel):
     id_detalle_odc: Optional[int] = None
     id_producto: Optional[int] = None
+    texto_abierto: Optional[str] = None
+    espesor: Optional[str] = None
+    ancho: Optional[str] = None
+    largo: Optional[str] = None
     cantidad: Optional[Decimal] = None
     piezas: Optional[Decimal] = None
     volumen: Optional[Decimal] = None
     volumen_eq: Optional[Decimal] = None
     id_bodega: Optional[int] = None
+    numero_guia: Optional[str] = None
     observaciones: Optional[str] = None
+
+
+class RecepcionarGuiaPayload(BaseModel):
+    numero_guia: Optional[str] = None
+    fecha_recepcion: Optional[date] = None
+    id_bodega: Optional[int] = None
+    observaciones: Optional[str] = None
+    items: Optional[List[RecepcionarItemPayload]] = None
 
 
 class RecepcionarOrdenCompraPayload(BaseModel):
     id_bodega: Optional[int] = None
     fecha_recepcion: Optional[date] = None
+    numero_guia: Optional[str] = None
     observaciones: Optional[str] = None
     items: Optional[List[RecepcionarItemPayload]] = None
+    guias: Optional[List[RecepcionarGuiaPayload]] = None
 
 
 class InventarioTransitorioRead(InventarioTransitorioBase):
