@@ -141,7 +141,6 @@ def _validate_volumen_orden_vs_proforma(db: Session, proforma_id: int, orden_com
     ).filter(
         OrdenCompra.id_proforma == proforma_id,
         OrdenCompra.id_orden_compra != orden_compra_id,
-        func.coalesce(OrdenCompra.vinculado, 0) != 1,
     ).scalar()
 
     volumen_otros_odc_dec = _to_decimal(volumen_otros_odc)
@@ -229,9 +228,8 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
         db.add(detalle_obj)
     db.flush()
 
-    # Validar productos y volumen acumulado contra la proforma solo para OCs normales
-    es_oc_directa = _is_directa(payload.vinculado)
-    if payload.id_proforma and not es_oc_directa:
+    # Validar productos y volumen acumulado contra la proforma siempre que exista id_proforma
+    if payload.id_proforma:
         _validate_especies_orden_vs_proforma(db, payload.id_proforma, obj.id_orden_compra)
         _validate_volumen_orden_vs_proforma(db, payload.id_proforma, obj.id_orden_compra)
 
@@ -602,7 +600,7 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
             db.add(detalle_obj)
     db.flush()
 
-    if nuevo_id_proforma and not es_oc_directa:
+    if nuevo_id_proforma:
         _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
         _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
 
