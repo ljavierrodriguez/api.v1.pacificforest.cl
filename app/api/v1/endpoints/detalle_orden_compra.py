@@ -18,6 +18,8 @@ DetalleOrdenCompraCreate,
 )
 from app.schemas.pagination import create_paginated_response
 
+from app.api.v1.endpoints.orden_compra import _validate_volumen_orden_vs_proforma, _is_directa
+
 router = APIRouter(prefix="/detalle_orden_compra", tags=["detalle_orden_compra"])
 
 
@@ -25,85 +27,62 @@ VOLUME_EPSILON = Decimal("0.001")
 VOLUME_TOLERANCE_PCT = Decimal("0.10")
 
 
-def _to_decimal(value) -> Decimal:
-    if value is None:
+def _to_decimal(val) -> Decimal:
+    if val is None:
         return Decimal("0")
-    if isinstance(value, Decimal):
-        return value
     try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError):
+        return Decimal(str(val))
+    except Exception:
         return Decimal("0")
 
 
-def _validate_producto_vs_proforma(
-    db: Session,
-    proforma_id: int,
-    id_producto: int | None,
-) -> None:
+def _validate_producto_vs_proforma(db: Session, proforma_id: int, producto_id: int | None) -> None:
+    if not producto_id:
+        return
+
     productos_proforma = {
-        product_id
-        for (product_id,) in (
+        pid
+        for (pid,) in (
             db.query(DetalleProforma.id_producto)
             .filter(DetalleProforma.id_proforma == proforma_id)
             .distinct()
             .all()
         )
-        if product_id is not None
+        if pid is not None
     }
 
-    if not productos_proforma:
-        if id_producto is not None:
-            raise HTTPException(
-                status_code=403,
-                detail="La proforma asociada no tiene productos definidos; no se puede asignar id_producto en el detalle",
-            )
-        return
-
-    if id_producto is None:
+    if productos_proforma and producto_id not in productos_proforma:
         raise HTTPException(
             status_code=403,
-            detail="La proforma asociada tiene productos definidos; el detalle debe incluir id_producto",
-        )
-
-    if id_producto not in productos_proforma:
-        raise HTTPException(
-            status_code=403,
-            detail=f"El producto {id_producto} no existe en la proforma asociada",
+            detail=f"El producto con ID {producto_id} no pertenece a la proforma seleccionada",
         )
 
 
-def _update_proforma_estado(db: Session, proforma_id: int) -> None:
-    proforma = db.get(Proforma, proforma_id)
+def _update_proforma_estado(db: Session, id_proforma: int) -> None:
+    proforma = db.get(Proforma, id_proforma)
     if not proforma:
         return
 
     volumen_proforma = db.query(
-        func.coalesce(
-            func.sum(DetalleProforma.volumen_eq),
-            0,
-        )
-    ).filter(DetalleProforma.id_proforma == proforma_id).scalar()
+        func.coalesce(func.sum(DetalleProforma.volumen_eq), 0)
+    ).filter(DetalleProforma.id_proforma == id_proforma).scalar()
 
     volumen_odc = db.query(
         func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
     ).join(
         OrdenCompra,
         DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
-    ).filter(OrdenCompra.id_proforma == proforma_id).scalar()
+    ).filter(
+        OrdenCompra.id_proforma == id_proforma,
+        func.coalesce(OrdenCompra.vinculado, 0) != 1,
+    ).scalar()
 
-    tiene_odc = db.query(OrdenCompra.id_orden_compra).filter(
-        OrdenCompra.id_proforma == proforma_id
-    ).first() is not None
-
-    if not tiene_odc:
+    if (volumen_odc or 0) == 0:
         proforma.id_estado_proforma = 1
     elif (volumen_odc or 0) >= (volumen_proforma or 0) - 10:
         proforma.id_estado_proforma = 3
     else:
         proforma.id_estado_proforma = 2
-
-    db.add(proforma)
 
 
 @router.post("/", response_model=DetalleOrdenCompraRead, summary='POST Detalle Orden Compra', description='POST Detalle Orden Compra endpoint. Replace this placeholder with a meaningful description.')
@@ -115,52 +94,13 @@ def create_detalle(payload: DetalleOrdenCompraCreate, db: Session = Depends(get_
     if orden.id_proforma:
         _validate_producto_vs_proforma(db, orden.id_proforma, payload.id_producto)
 
-    if orden.id_proforma and payload.volumen_eq is not None:
-        volumen_proforma_total = db.query(
-            func.coalesce(
-                func.sum(cast(DetalleProforma.volumen_eq, Numeric(12, 3))),
-                0,
-            )
-        ).filter(
-            DetalleProforma.id_proforma == orden.id_proforma,
-        ).scalar()
-
-        volumen_otros_odc_total = db.query(
-            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
-        ).join(
-            OrdenCompra,
-            DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
-        ).filter(
-            OrdenCompra.id_proforma == orden.id_proforma,
-            OrdenCompra.id_orden_compra != orden.id_orden_compra,
-        ).scalar()
-
-        volumen_actual_odc_total = db.query(
-            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
-        ).filter(
-            DetalleOrdenCompra.id_orden_compra == orden.id_orden_compra,
-        ).scalar()
-
-        volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
-        volumen_otros_odc_total_dec = _to_decimal(volumen_otros_odc_total)
-        volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
-        nuevo_total_odc = _to_decimal(volumen_actual_odc_total) + _to_decimal(payload.volumen_eq)
-        limite = volumen_maximo_permitido - volumen_otros_odc_total_dec
-
-        if nuevo_total_odc > (limite + VOLUME_EPSILON):
-            if volumen_otros_odc_total_dec >= (volumen_maximo_permitido - VOLUME_EPSILON):
-                raise HTTPException(
-                    status_code=403,
-                    detail="El volumen de la proforma ya fue completado",
-                )
-            maximo_volumen = limite.quantize(Decimal("0.001"))
-            raise HTTPException(
-                status_code=403,
-                detail=f"El volumen total supera el pendiente de la proforma ({maximo_volumen})",
-            )
-
     obj = DetalleOrdenCompra(**payload.model_dump())
     db.add(obj)
+    db.flush()
+
+    if orden.id_proforma and not _is_directa(orden.vinculado):
+        _validate_volumen_orden_vs_proforma(db, orden.id_proforma, orden.id_orden_compra)
+
     db.commit()
     db.refresh(obj)
     if orden.id_proforma:
@@ -241,60 +181,19 @@ def update_detalle(item_id: int, payload: DetalleOrdenCompraUpdate, db: Session 
         raise HTTPException(status_code=404, detail="Not found")
 
     orden = db.get(OrdenCompra, item.id_orden_compra)
-    new_volumen_eq = payload.volumen_eq if payload.volumen_eq is not None else item.volumen_eq
     new_id_producto = payload.id_producto if payload.id_producto is not None else item.id_producto
 
     if orden and orden.id_proforma:
         _validate_producto_vs_proforma(db, orden.id_proforma, new_id_producto)
 
-    if orden and orden.id_proforma and new_volumen_eq is not None:
-        volumen_proforma_total = db.query(
-            func.coalesce(
-                func.sum(cast(DetalleProforma.volumen_eq, Numeric(12, 3))),
-                0,
-            )
-        ).filter(
-            DetalleProforma.id_proforma == orden.id_proforma,
-        ).scalar()
-
-        volumen_otros_odc_total = db.query(
-            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
-        ).join(
-            OrdenCompra,
-            DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
-        ).filter(
-            OrdenCompra.id_proforma == orden.id_proforma,
-            OrdenCompra.id_orden_compra != orden.id_orden_compra,
-        ).scalar()
-
-        volumen_actual_odc_total = db.query(
-            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
-        ).filter(
-            DetalleOrdenCompra.id_orden_compra == orden.id_orden_compra,
-            DetalleOrdenCompra.id_detalle_odc != item_id,
-        ).scalar()
-
-        volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
-        volumen_otros_odc_total_dec = _to_decimal(volumen_otros_odc_total)
-        volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
-        nuevo_total_odc = _to_decimal(volumen_actual_odc_total) + _to_decimal(new_volumen_eq)
-        limite = volumen_maximo_permitido - volumen_otros_odc_total_dec
-
-        if nuevo_total_odc > (limite + VOLUME_EPSILON):
-            if volumen_otros_odc_total_dec >= (volumen_maximo_permitido - VOLUME_EPSILON):
-                raise HTTPException(
-                    status_code=403,
-                    detail="El volumen de la proforma ya fue completado",
-                )
-            maximo_volumen = limite.quantize(Decimal("0.001"))
-            raise HTTPException(
-                status_code=403,
-                detail=f"El volumen total supera el pendiente de la proforma ({maximo_volumen})",
-            )
-
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(item, k, v)
     db.add(item)
+    db.flush()
+
+    if orden and orden.id_proforma and not _is_directa(orden.vinculado):
+        _validate_volumen_orden_vs_proforma(db, orden.id_proforma, orden.id_orden_compra)
+
     db.commit()
     db.refresh(item)
     if orden and orden.id_proforma:

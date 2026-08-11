@@ -115,20 +115,26 @@ def _validate_especies_orden_vs_proforma(db: Session, proforma_id: int, orden_co
 
 
 def _validate_volumen_orden_vs_proforma(db: Session, proforma_id: int, orden_compra_id: int) -> None:
-    volumen_orden = db.query(
-        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
-    ).filter(
-        DetalleOrdenCompra.id_orden_compra == orden_compra_id,
-    ).scalar()
+    if not proforma_id:
+        return
 
     volumen_proforma_total = db.query(
-        func.coalesce(func.sum(DetalleProforma.volumen_eq), 0)
+        func.coalesce(
+            func.sum(func.coalesce(DetalleProforma.volumen_eq, DetalleProforma.cantidad, 0)),
+            0,
+        )
     ).filter(
         DetalleProforma.id_proforma == proforma_id,
     ).scalar()
 
-    volumen_odc_total = db.query(
-        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+    volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
+    volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
+
+    volumen_otros_odc = db.query(
+        func.coalesce(
+            func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, DetalleOrdenCompra.volumen, DetalleOrdenCompra.cantidad, 0)),
+            0,
+        )
     ).join(
         OrdenCompra,
         DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
@@ -138,24 +144,38 @@ def _validate_volumen_orden_vs_proforma(db: Session, proforma_id: int, orden_com
         func.coalesce(OrdenCompra.vinculado, 0) != 1,
     ).scalar()
 
-    volumen_orden_dec = _to_decimal(volumen_orden)
-    volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
-    volumen_odc_total_dec = _to_decimal(volumen_odc_total)
+    volumen_otros_odc_dec = _to_decimal(volumen_otros_odc)
 
-    volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
-    pendiente = volumen_maximo_permitido - volumen_odc_total_dec
+    volumen_actual_odc = db.query(
+        func.coalesce(
+            func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, DetalleOrdenCompra.volumen, DetalleOrdenCompra.cantidad, 0)),
+            0,
+        )
+    ).filter(
+        DetalleOrdenCompra.id_orden_compra == orden_compra_id,
+    ).scalar()
 
-    pendiente_real = volumen_proforma_total_dec - volumen_odc_total_dec
+    volumen_actual_odc_dec = _to_decimal(volumen_actual_odc)
+    volumen_total_acumulado = volumen_otros_odc_dec + volumen_actual_odc_dec
 
-    if volumen_orden_dec > (pendiente + VOLUME_EPSILON):
-        if pendiente <= VOLUME_EPSILON:
+    disponible_para_esta_oc = volumen_maximo_permitido - volumen_otros_odc_dec
+    if disponible_para_esta_oc < Decimal("0"):
+        disponible_para_esta_oc = Decimal("0")
+
+    if volumen_total_acumulado > (volumen_maximo_permitido + VOLUME_EPSILON):
+        if disponible_para_esta_oc <= VOLUME_EPSILON:
             raise HTTPException(
                 status_code=403,
-                detail="El volumen de la proforma ya fue completado",
+                detail=f"El volumen de la proforma PF-{proforma_id} ya fue completado ({volumen_otros_odc_dec.quantize(Decimal('0.001'))} m³ de {volumen_proforma_total_dec.quantize(Decimal('0.001'))} m³ + 10% tol).",
             )
         raise HTTPException(
             status_code=403,
-            detail=f"El volumen total de la orden supera el pendiente de la proforma ({pendiente_real.quantize(Decimal('0.001'))})",
+            detail=(
+                f"El volumen total acumulado de las órdenes de compra ({volumen_total_acumulado.quantize(Decimal('0.001'))} m³) "
+                f"supera el máximo permitido para la proforma PF-{proforma_id} "
+                f"({volumen_maximo_permitido.quantize(Decimal('0.001'))} m³ = {volumen_proforma_total_dec.quantize(Decimal('0.001'))} m³ + 10% tolerancia). "
+                f"Volumen máximo disponible para esta orden: {disponible_para_esta_oc.quantize(Decimal('0.001'))} m³."
+            ),
         )
 
 
@@ -196,72 +216,6 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
     db.add(obj)
     db.flush()
 
-    # Validar productos y volumen contra la proforma solo para OCs normales.
-    # OCs directas/asignadas (vinculado=1) no se validan por volumen ni por producto de proforma.
-    es_oc_directa = _is_directa(payload.vinculado)
-    if payload.id_proforma and not es_oc_directa:
-        productos_proforma = {
-            product_id
-            for (product_id,) in (
-                db.query(DetalleProforma.id_producto)
-                .filter(DetalleProforma.id_proforma == payload.id_proforma)
-                .distinct()
-                .all()
-            )
-            if product_id is not None
-        }
-
-        productos_odc = {
-            detalle.id_producto
-            for detalle in payload.detalles
-            if detalle.id_producto is not None
-        }
-
-        if productos_proforma and not productos_odc:
-            raise HTTPException(
-                status_code=403,
-                detail="La proforma asociada tiene productos definidos; la orden de compra debe incluir id_producto en sus detalles",
-            )
-
-        productos_no_permitidos = productos_odc - productos_proforma
-        if productos_no_permitidos:
-            raise HTTPException(
-                status_code=403,
-                detail=f"La orden de compra incluye producto(s) que no existen en la proforma: {sorted(productos_no_permitidos)}",
-            )
-
-        volumen_payload = sum(_to_decimal(detalle.volumen_eq) for detalle in payload.detalles)
-
-        volumen_proforma_total = db.query(
-            func.coalesce(func.sum(DetalleProforma.volumen_eq), 0)
-        ).filter(DetalleProforma.id_proforma == payload.id_proforma).scalar()
-
-        volumen_odc_total = db.query(
-            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
-        ).join(
-            OrdenCompra,
-            DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
-        ).filter(
-            OrdenCompra.id_proforma == payload.id_proforma,
-            func.coalesce(OrdenCompra.vinculado, 0) != 1,
-        ).scalar()
-
-        volumen_proforma_total_dec = _to_decimal(volumen_proforma_total)
-        volumen_odc_total_dec = _to_decimal(volumen_odc_total)
-        volumen_maximo_permitido = volumen_proforma_total_dec * (Decimal("1") + VOLUME_TOLERANCE_PCT)
-        pendiente = volumen_maximo_permitido - volumen_odc_total_dec
-
-        if volumen_payload > (pendiente + VOLUME_EPSILON):
-            if pendiente <= VOLUME_EPSILON:
-                raise HTTPException(
-                    status_code=403,
-                    detail="El volumen de la proforma ya fue completado",
-                )
-            raise HTTPException(
-                status_code=403,
-                detail=f"El volumen total de la orden supera el pendiente permitido ({pendiente.quantize(Decimal('0.001'))})",
-            )
-
     for detalle in payload.detalles:
         detalle_dict = detalle.model_dump(exclude_unset=True)
         if detalle_dict.get("subtotal") is None:
@@ -273,6 +227,13 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
             **detalle_dict,
         )
         db.add(detalle_obj)
+    db.flush()
+
+    # Validar productos y volumen acumulado contra la proforma solo para OCs normales
+    es_oc_directa = _is_directa(payload.vinculado)
+    if payload.id_proforma and not es_oc_directa:
+        _validate_especies_orden_vs_proforma(db, payload.id_proforma, obj.id_orden_compra)
+        _validate_volumen_orden_vs_proforma(db, payload.id_proforma, obj.id_orden_compra)
 
     db.commit()
     db.refresh(obj)
@@ -614,17 +575,6 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
     nuevo_vinculado = payload_data.get("vinculado", item.vinculado)
     es_oc_directa = _is_directa(nuevo_vinculado)
 
-    if "id_proforma" in payload_data:
-        if nuevo_id_proforma is not None and nuevo_id_proforma != item.id_proforma:
-            if not es_oc_directa:
-                _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
-                _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
-
-    # Si cambia de directa a normal manteniendo proforma, validar al vuelo.
-    if "vinculado" in payload_data and not es_oc_directa and nuevo_id_proforma is not None:
-        _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
-        _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
-
     detalles_data = payload_data.pop("detalles", None)
 
     for k, v in payload_data.items():
@@ -650,6 +600,11 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
                 **detalle_dict,
             )
             db.add(detalle_obj)
+    db.flush()
+
+    if nuevo_id_proforma and not es_oc_directa:
+        _validate_especies_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
+        _validate_volumen_orden_vs_proforma(db, nuevo_id_proforma, item.id_orden_compra)
 
     db.commit()
     db.refresh(item)
@@ -682,47 +637,105 @@ def desvincular_orden_compra(
     return item
 
 
+def _update_proforma_estado(db: Session, proforma_id: int) -> None:
+    if not proforma_id:
+        return
+    from app.models.proforma import Proforma
+    from app.models.detalle_proforma import DetalleProforma
+    proforma = db.get(Proforma, proforma_id)
+    if not proforma:
+        return
+
+    volumen_proforma = db.query(
+        func.coalesce(func.sum(DetalleProforma.volumen_eq), 0)
+    ).filter(DetalleProforma.id_proforma == proforma_id).scalar()
+
+    volumen_odc = db.query(
+        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+    ).join(
+        OrdenCompra,
+        DetalleOrdenCompra.id_orden_compra == OrdenCompra.id_orden_compra,
+    ).filter(
+        OrdenCompra.id_proforma == proforma_id,
+        func.coalesce(OrdenCompra.vinculado, 0) != 1,
+    ).scalar()
+
+    if (volumen_odc or 0) == 0:
+        proforma.id_estado_proforma = 1
+    elif (volumen_odc or 0) >= (volumen_proforma or 0) - 10:
+        proforma.id_estado_proforma = 3
+    else:
+        proforma.id_estado_proforma = 2
+
+    db.add(proforma)
+
+
 @router.delete("/{item_id}", summary='DELETE OrdenCompra', description='Eliminar una orden de compra.')
 def delete_orden_compra(item_id: int, db: Session = Depends(get_db)):
     item = db.get(OrdenCompra, item_id)
     if not item:
-        raise HTTPException(status_code=404, detail="OrdenCompra not found")
+        raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
     
     try:
-        # Verificar si tiene detalles asociados
+        # 1. Verificar si tiene recepciones en Inventario Transitorio
+        from app.models.inventario_transitorio import InventarioTransitorio
+        transitorio_count = db.query(InventarioTransitorio).filter(
+            InventarioTransitorio.id_orden_compra == item_id
+        ).count()
+        if transitorio_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede eliminar la Orden de Compra OC-{item_id} porque tiene {transitorio_count} registro(s) de guía(s) recepcionada(s) en Inventario Transitorio.",
+            )
+
+        # 2. Verificar si tiene Órdenes de Servicio asociadas
+        from app.models.orden_servicio import OrdenServicio
+        os_count = db.query(OrdenServicio).filter(
+            OrdenServicio.id_orden_compra == item_id
+        ).count()
+        if os_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede eliminar la Orden de Compra OC-{item_id} porque tiene {os_count} orden(es) de servicio asociada(s).",
+            )
+
+        # 3. Verificar si tiene registros PLE asociados
+        from app.models.ple import Ple
+        ple_count = db.query(Ple).filter(
+            Ple.id_orden_compra == item_id
+        ).count()
+        if ple_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede eliminar la Orden de Compra OC-{item_id} porque tiene {ple_count} registro(s) PLE asociado(s).",
+            )
+
+        proforma_id = item.id_proforma
+
+        # Eliminar detalles y contactos propios de la OC
         from app.models.detalle_orden_compra import DetalleOrdenCompra
-        detalles_count = db.query(DetalleOrdenCompra).filter(
+        db.query(DetalleOrdenCompra).filter(
             DetalleOrdenCompra.id_orden_compra == item_id
-        ).count()
-        
-        if detalles_count > 0:
-            if item.id_proforma is not None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No se puede eliminar la orden de compra porque está asociada a una proforma",
-                )
-            raise HTTPException(
-                status_code=400, 
-                detail=f"No se puede eliminar la orden de compra porque tiene {detalles_count} detalle(s) asociado(s)"
-            )
-        
-        # Verificar si tiene contactos asociados
+        ).delete(synchronize_session=False)
+
         from app.models.contacto_orden_compra import ContactoOrdenCompra
-        contactos_count = db.query(ContactoOrdenCompra).filter(
+        db.query(ContactoOrdenCompra).filter(
             ContactoOrdenCompra.id_orden_compra == item_id
-        ).count()
-        
-        if contactos_count > 0:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"No se puede eliminar la orden de compra porque tiene {contactos_count} contacto(s) asociado(s)"
-            )
-        
+        ).delete(synchronize_session=False)
+
+        # Eliminar la orden de compra
         db.delete(item)
+        db.flush()
+
+        # Recalcular estado de la proforma vinculada
+        if proforma_id:
+            _update_proforma_estado(db, proforma_id)
+
         db.commit()
-        return {"ok": True}
+        return {"ok": True, "message": f"Orden de Compra OC-{item_id} eliminada exitosamente"}
         
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
         db.rollback()
