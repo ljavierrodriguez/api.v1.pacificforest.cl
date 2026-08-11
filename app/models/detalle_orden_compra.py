@@ -137,3 +137,12 @@ def _round_vols(mapper, connection, target: DetalleOrdenCompra):
 
     target.volumen_eq = _round3(target.volumen_eq)
     target.volumen = _round3(target.volumen)
+
+    if target.subtotal is None:
+        try:
+            cant = float(target.cantidad or 0)
+            pu = float(target.precio_unitario or 0)
+            target.subtotal = round(cant * pu, 3)
+        except Exception:
+            target.subtotal = 0.0
+

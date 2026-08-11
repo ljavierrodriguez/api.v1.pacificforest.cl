@@ -263,9 +263,14 @@ def create_orden_compra(payload: OrdenCompraCreate, db: Session = Depends(get_db
             )
 
     for detalle in payload.detalles:
+        detalle_dict = detalle.model_dump(exclude_unset=True)
+        if detalle_dict.get("subtotal") is None:
+            cant = float(detalle_dict.get("cantidad") or 0)
+            pu = float(detalle_dict.get("precio_unitario") or 0)
+            detalle_dict["subtotal"] = round(cant * pu, 3)
         detalle_obj = DetalleOrdenCompra(
             id_orden_compra=obj.id_orden_compra,
-            **detalle.model_dump(exclude_unset=True),
+            **detalle_dict,
         )
         db.add(detalle_obj)
 
@@ -636,6 +641,10 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
             detalle_dict.pop("id_especie", None)
             detalle_dict.pop("producto_nombre", None)
             detalle_dict.pop("unidad_venta_nombre", None)
+            if detalle_dict.get("subtotal") is None:
+                cant = float(detalle_dict.get("cantidad") or 0)
+                pu = float(detalle_dict.get("precio_unitario") or 0)
+                detalle_dict["subtotal"] = round(cant * pu, 3)
             detalle_obj = DetalleOrdenCompra(
                 id_orden_compra=item.id_orden_compra,
                 **detalle_dict,
