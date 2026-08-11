@@ -103,24 +103,19 @@ def list_proforma(
         func.sum(cast(func.coalesce(func.replace(cast(DetalleProforma.volumen_eq, String), ',', '.'), '0'), Numeric(12, 3))).label("vol_total")
     ).group_by(DetalleProforma.id_proforma).subquery()
 
-    # Subconsulta para volumen total por OC (Numeric(12, 3) ya es numérico)
+    # Subconsulta para volumen total por OC (con fallback volumen_eq -> volumen -> cantidad)
     volumen_per_oc_sub = db.query(
         DetalleOrdenCompra.id_orden_compra,
-        func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, 0)).label("vol_oc")
+        func.sum(
+            func.coalesce(DetalleOrdenCompra.volumen_eq, DetalleOrdenCompra.volumen, DetalleOrdenCompra.cantidad, 0)
+        ).label("vol_oc")
     ).group_by(DetalleOrdenCompra.id_orden_compra).subquery()
 
     # Subconsulta para volumen asignado y conteo de OCs por Proforma
-    # cnt_oc: cuenta TODAS las asociadas (normales o vinculadas)
-    # vol_asig: suma SOLO las normales (vinculado IS NULL o != 1)
     oc_summary_sub = db.query(
         OrdenCompra.id_proforma,
         func.count(OrdenCompra.id_orden_compra).label("cnt_oc"),
-        func.sum(
-            case(
-                (func.coalesce(OrdenCompra.vinculado, 0) != 1, func.coalesce(volumen_per_oc_sub.c.vol_oc, 0)),
-                else_=0
-            )
-        ).label("vol_asig")
+        func.sum(func.coalesce(volumen_per_oc_sub.c.vol_oc, 0)).label("vol_asig")
     ).outerjoin(volumen_per_oc_sub, OrdenCompra.id_orden_compra == volumen_per_oc_sub.c.id_orden_compra)\
      .group_by(OrdenCompra.id_proforma).subquery()
 
@@ -287,22 +282,19 @@ def search_proforma(
         func.sum(cast(func.coalesce(func.replace(cast(DetalleProforma.volumen_eq, String), ',', '.'), '0'), Numeric(12, 3))).label("vol_total")
     ).group_by(DetalleProforma.id_proforma).subquery()
 
-    # Subconsulta volumen total por OC
+    # Subconsulta volumen total por OC (con fallback)
     volumen_per_oc_sub = db.query(
         DetalleOrdenCompra.id_orden_compra,
-        func.sum(func.coalesce(DetalleOrdenCompra.volumen_eq, 0)).label("vol_oc")
+        func.sum(
+            func.coalesce(DetalleOrdenCompra.volumen_eq, DetalleOrdenCompra.volumen, DetalleOrdenCompra.cantidad, 0)
+        ).label("vol_oc")
     ).group_by(DetalleOrdenCompra.id_orden_compra).subquery()
 
     # Subconsulta volumen asignado y conteo de OCs por proforma
     oc_summary_sub = db.query(
         OrdenCompra.id_proforma,
         func.count(OrdenCompra.id_orden_compra).label("cnt_oc"),
-        func.sum(
-            case(
-                (func.coalesce(OrdenCompra.vinculado, 0) != 1, func.coalesce(volumen_per_oc_sub.c.vol_oc, 0)),
-                else_=0
-            )
-        ).label("vol_asig")
+        func.sum(func.coalesce(volumen_per_oc_sub.c.vol_oc, 0)).label("vol_asig")
     ).outerjoin(volumen_per_oc_sub, OrdenCompra.id_orden_compra == volumen_per_oc_sub.c.id_orden_compra)\
      .group_by(OrdenCompra.id_proforma).subquery()
 
@@ -502,13 +494,17 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
     ).filter(DetalleProforma.id_proforma == item_id).scalar() or 0
 
     volumen_desde_oc = db.query(
-        func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0)
+        func.coalesce(
+            func.sum(
+                func.coalesce(DetalleOrdenCompra.volumen_eq, DetalleOrdenCompra.volumen, DetalleOrdenCompra.cantidad, 0)
+            ),
+            0,
+        )
     ).join(
         OrdenCompra,
         OrdenCompra.id_orden_compra == DetalleOrdenCompra.id_orden_compra,
     ).filter(
         OrdenCompra.id_proforma == item_id,
-        func.coalesce(OrdenCompra.vinculado, 0) != 1,
     ).scalar() or 0
 
     volumen_desde_os = db.query(
@@ -584,7 +580,12 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
     if oc_ids:
         vol_rows = db.query(
             DetalleOrdenCompra.id_orden_compra,
-            func.coalesce(func.sum(DetalleOrdenCompra.volumen_eq), 0).label("volumen_total"),
+            func.coalesce(
+                func.sum(
+                    func.coalesce(DetalleOrdenCompra.volumen_eq, DetalleOrdenCompra.volumen, DetalleOrdenCompra.cantidad, 0)
+                ),
+                0,
+            ).label("volumen_total"),
         ).filter(
             DetalleOrdenCompra.id_orden_compra.in_(oc_ids)
         ).group_by(
