@@ -307,7 +307,8 @@ def list_orden_compra(
             "bodega_nombre": row.bodega_nombre,
             "empresa_nombre": row.empresa_nombre,
             "estado_nombre": row.estado_nombre,
-            "id_operacion_exportacion": row.id_operacion_exportacion
+            "id_operacion_exportacion": row.id_operacion_exportacion,
+            "tipo": "Asignada" if oc.id_proforma else "Directa",
         })
         items.append(item_dict)
     
@@ -426,6 +427,7 @@ def search_orden_compra(
             "empresa_nombre": row.empresa_nombre,
             "estado_nombre": row.estado_nombre,
             "id_operacion_exportacion": row.id_operacion_exportacion,
+            "tipo": "Asignada" if oc.id_proforma else "Directa",
         })
 
         items.append(item_dict)
@@ -448,6 +450,7 @@ def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
     # Serializar la orden de compra
     oc_dict = item.serialize() if hasattr(item, 'serialize') else dict(item.__dict__)
     oc_dict["volumenTotal"] = _round_volume(volumen_total)
+    oc_dict["tipo"] = "Asignada" if item.id_proforma else "Directa"
 
     # Agregar etiquetas si existen
     proveedor = getattr(item, "ClienteProveedor", None)

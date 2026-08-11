@@ -636,7 +636,7 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
             "estado_nombre": getattr(estado_odc, "nombre", None),
             "id_estado_odc": oc.id_estado_odc,
             "vinculado": oc.vinculado,
-            "tipo": "Directa/Asignada" if int(getattr(oc, "vinculado", 0) or 0) == 1 else "Normal",
+            "tipo": "Asignada" if oc.id_proforma else "Directa",
             "ordenes_servicio": os_payload_for_oc,
         })
 
