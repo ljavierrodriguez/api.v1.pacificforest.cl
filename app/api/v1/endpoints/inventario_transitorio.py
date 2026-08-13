@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
 from typing import Optional, List
-from datetime import date
+from datetime import date, datetime
+import os
 
 from app.db.session import get_db
 from app.models.inventario_transitorio import InventarioTransitorio
+from app.models.guia_inventario_transitorio import GuiaInventarioTransitorio
 from app.models.orden_compra import OrdenCompra
 from app.models.detalle_orden_compra import DetalleOrdenCompra
 from app.schemas.inventario_transitorio import (
@@ -13,6 +15,8 @@ from app.schemas.inventario_transitorio import (
     InventarioTransitorioUpdate,
     InventarioTransitorioRead,
     PaginatedInventarioTransitorioResponse,
+    GuiaInventarioTransitorioRead,
+    PaginatedGuiaInventarioTransitorioResponse,
     RecepcionarOrdenCompraPayload,
 )
 
@@ -62,6 +66,8 @@ def get_inventario_transitorio(
                 cast(InventarioTransitorio.id_inventario_transitorio, String).ilike(s),
                 cast(InventarioTransitorio.id_orden_compra, String).ilike(s),
                 InventarioTransitorio.numero_guia.ilike(s),
+                InventarioTransitorio.numero_proforma.ilike(s),
+                InventarioTransitorio.etiqueta.ilike(s),
                 InventarioTransitorio.texto_abierto.ilike(s),
                 InventarioTransitorio.observaciones.ilike(s),
                 InventarioTransitorio.estado.ilike(s),
@@ -86,6 +92,76 @@ def get_inventario_transitorio(
     items_read = [InventarioTransitorioRead(**item.to_dict()) for item in items]
 
     return PaginatedInventarioTransitorioResponse(
+        items=items_read,
+        page=page,
+        page_size=page_size,
+        total_items=total_items,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_prev=page > 1,
+    )
+
+
+@router.get(
+    "/guias",
+    response_model=PaginatedGuiaInventarioTransitorioResponse,
+    summary="GET GuiaInventarioTransitorio list",
+    description="Obtener listado de guías de inventario transitorio con sus detalles anidados."
+)
+def get_guias_inventario_transitorio(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=1000),
+    search: Optional[str] = Query(None, description="Búsqueda por texto"),
+    id_orden_compra: Optional[int] = Query(None, description="Filtrar por ID de orden de compra"),
+    db: Session = Depends(get_db),
+):
+    query = db.query(GuiaInventarioTransitorio)
+    if id_orden_compra:
+        query = query.filter(GuiaInventarioTransitorio.id_orden_compra == id_orden_compra)
+    if search and search.strip():
+        s = f"%{search.strip()}%"
+        from app.models.producto import Producto
+        from app.models.bodega import Bodega
+        from app.models.cliente_proveedor import ClienteProveedor
+        from sqlalchemy import cast, String
+
+        query = (
+            query.outerjoin(GuiaInventarioTransitorio.detalles)
+            .outerjoin(InventarioTransitorio.Producto)
+            .outerjoin(GuiaInventarioTransitorio.Bodega)
+            .outerjoin(GuiaInventarioTransitorio.OrdenCompra)
+            .outerjoin(OrdenCompra.ClienteProveedor)
+            .filter(
+                or_(
+                    GuiaInventarioTransitorio.numero_guia.ilike(s),
+                    GuiaInventarioTransitorio.numero_proforma.ilike(s),
+                    GuiaInventarioTransitorio.observaciones.ilike(s),
+                    InventarioTransitorio.texto_abierto.ilike(s),
+                    InventarioTransitorio.etiqueta.ilike(s),
+                    Producto.nombre_producto_esp.ilike(s),
+                    Producto.nombre_producto_ing.ilike(s),
+                    Bodega.nombre.ilike(s),
+                    ClienteProveedor.razon_social.ilike(s),
+                    cast(GuiaInventarioTransitorio.id_orden_compra, String).ilike(s),
+                )
+            )
+            .distinct()
+        )
+
+    total_items = query.count()
+    total_pages = max(1, (total_items + page_size - 1) // page_size)
+    skip = (page - 1) * page_size
+
+    items = (
+        query.order_by(desc(GuiaInventarioTransitorio.id_guia_inventario_transitorio))
+        .offset(skip)
+        .limit(page_size)
+        .all()
+    )
+
+    items_read = [GuiaInventarioTransitorioRead(**item.to_dict()) for item in items]
+
+    return PaginatedGuiaInventarioTransitorioResponse(
         items=items_read,
         page=page,
         page_size=page_size,
@@ -148,6 +224,8 @@ def recepcionar_orden_compra(
     fecha_rec = (payload and payload.fecha_recepcion) or date.today()
     obs_general = (payload and payload.observaciones) or None
     top_numero_guia = (payload and payload.numero_guia) or None
+    top_numero_pf = (payload and payload.numero_proforma) or (f"PF-{oc.id_proforma}" if oc.id_proforma else None)
+    top_url_doc = (payload and payload.url_documento) or None
 
     created_items = []
 
@@ -159,6 +237,22 @@ def recepcionar_orden_compra(
             g_fecha = g.fecha_recepcion or fecha_rec
             g_bodega = g.id_bodega or bodega_id
             g_obs = g.observaciones or obs_general
+            g_num_pf = g.numero_proforma or top_numero_pf
+            g_url_doc = g.url_documento or top_url_doc
+
+            # Crear registro de cabecera normalizado
+            guia_header = GuiaInventarioTransitorio(
+                numero_guia=g_num_guia,
+                numero_proforma=g_num_pf,
+                id_orden_compra=oc.id_orden_compra,
+                id_bodega=g_bodega,
+                fecha_recepcion=g_fecha,
+                url_documento=g_url_doc,
+                observaciones=g_obs,
+                estado="RECIBIDO",
+            )
+            db.add(guia_header)
+            db.flush()
 
             g_items = g.items or []
             # Si la guía incluye ítems específicos
@@ -175,6 +269,10 @@ def recepcionar_orden_compra(
                     bodega_item = item_override.id_bodega if item_override.id_bodega else g_bodega
                     obs = item_override.observaciones if item_override.observaciones else g_obs
                     item_num_guia = item_override.numero_guia if item_override.numero_guia else g_num_guia
+                    item_num_pf = item_override.numero_proforma or g_num_pf
+                    item_etiqueta = item_override.etiqueta or None
+                    item_paquetes = item_override.numero_paquetes if item_override.numero_paquetes is not None else None
+                    item_url_doc = item_override.url_documento or g_url_doc
 
                     esp = item_override.espesor if item_override.espesor is not None else d.espesor
                     anc = item_override.ancho if item_override.ancho is not None else d.ancho
@@ -182,6 +280,7 @@ def recepcionar_orden_compra(
                     txt = item_override.texto_abierto if item_override.texto_abierto is not None else d.texto_abierto
 
                     inv = InventarioTransitorio(
+                        id_guia_inventario_transitorio=guia_header.id_guia_inventario_transitorio,
                         id_orden_compra=oc.id_orden_compra,
                         id_detalle_odc=d.id_detalle_odc,
                         id_producto=d.id_producto,
@@ -203,6 +302,10 @@ def recepcionar_orden_compra(
                         piezas=pzs,
                         fecha_recepcion=g_fecha,
                         numero_guia=item_num_guia,
+                        numero_proforma=item_num_pf,
+                        etiqueta=item_etiqueta,
+                        numero_paquetes=item_paquetes,
+                        url_documento=item_url_doc,
                         observaciones=obs,
                         estado="RECIBIDO",
                     )
@@ -212,6 +315,7 @@ def recepcionar_orden_compra(
                 # Si no especificó ítems en esta guía, agregar todos los detalles con los datos de la guía
                 for d in detalles:
                     inv = InventarioTransitorio(
+                        id_guia_inventario_transitorio=guia_header.id_guia_inventario_transitorio,
                         id_orden_compra=oc.id_orden_compra,
                         id_detalle_odc=d.id_detalle_odc,
                         id_producto=d.id_producto,
@@ -232,6 +336,8 @@ def recepcionar_orden_compra(
                         precio_eq=d.precio_eq,
                         fecha_recepcion=g_fecha,
                         numero_guia=g_num_guia,
+                        numero_proforma=g_num_pf,
+                        url_documento=g_url_doc,
                         observaciones=g_obs,
                         estado="RECIBIDO",
                     )
@@ -239,6 +345,19 @@ def recepcionar_orden_compra(
                     created_items.append(inv)
     else:
         # Caso 2: Recepción simple / legacy (un solo bloque de items)
+        guia_header = GuiaInventarioTransitorio(
+            numero_guia=top_numero_guia,
+            numero_proforma=top_numero_pf,
+            id_orden_compra=oc.id_orden_compra,
+            id_bodega=bodega_id,
+            fecha_recepcion=fecha_rec,
+            url_documento=top_url_doc,
+            observaciones=obs_general,
+            estado="RECIBIDO",
+        )
+        db.add(guia_header)
+        db.flush()
+
         items_map = {}
         if payload and payload.items:
             for item in payload.items:
@@ -254,6 +373,10 @@ def recepcionar_orden_compra(
             bodega_item = item_override.id_bodega if (item_override and item_override.id_bodega) else bodega_id
             obs = item_override.observaciones if (item_override and item_override.observaciones) else obs_general
             num_guia = item_override.numero_guia if (item_override and item_override.numero_guia) else top_numero_guia
+            num_pf = (item_override and item_override.numero_proforma) or top_numero_pf
+            etq = item_override and item_override.etiqueta
+            pqs = item_override and item_override.numero_paquetes
+            doc = (item_override and item_override.url_documento) or top_url_doc
 
             esp = item_override.espesor if (item_override and item_override.espesor is not None) else d.espesor
             anc = item_override.ancho if (item_override and item_override.ancho is not None) else d.ancho
@@ -261,6 +384,7 @@ def recepcionar_orden_compra(
             txt = item_override.texto_abierto if (item_override and item_override.texto_abierto is not None) else d.texto_abierto
 
             inv = InventarioTransitorio(
+                id_guia_inventario_transitorio=guia_header.id_guia_inventario_transitorio,
                 id_orden_compra=oc.id_orden_compra,
                 id_detalle_odc=d.id_detalle_odc,
                 id_producto=d.id_producto,
@@ -282,6 +406,10 @@ def recepcionar_orden_compra(
                 piezas=pzs,
                 fecha_recepcion=fecha_rec,
                 numero_guia=num_guia,
+                numero_proforma=num_pf,
+                etiqueta=etq,
+                numero_paquetes=pqs,
+                url_documento=doc,
                 observaciones=obs,
                 estado="RECIBIDO",
             )
@@ -294,6 +422,61 @@ def recepcionar_orden_compra(
         db.refresh(item)
 
     return [InventarioTransitorioRead(**item.to_dict()) for item in created_items]
+
+
+@router.post(
+    "/guia/documento",
+    summary="Subir documento anexo para una Guía de Despacho",
+    description="Sube un archivo (PDF, imagen, etc.) y lo asocia a todas las entradas con ese numero_guia."
+)
+def upload_documento_guia(
+    numero_guia: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    if not numero_guia or not numero_guia.strip():
+        raise HTTPException(status_code=400, detail="Debe especificar un número de guía.")
+    
+    clean_guia = numero_guia.strip()
+    headers = db.query(GuiaInventarioTransitorio).filter(GuiaInventarioTransitorio.numero_guia == clean_guia).all()
+    items = db.query(InventarioTransitorio).filter(InventarioTransitorio.numero_guia == clean_guia).all()
+
+    static_path = os.path.join(os.getcwd(), "app", "static", "documentos_guias")
+    os.makedirs(static_path, exist_ok=True)
+    
+    file_extension = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_guia = clean_guia.replace("/", "_").replace("\\", "_")
+    unique_filename = f"guia_{safe_guia}_{timestamp}{file_extension}"
+    file_path = os.path.join(static_path, unique_filename)
+    
+    with open(file_path, "wb") as buffer:
+        buffer.write(file.file.read())
+        
+    url_documento = f"/static/documentos_guias/{unique_filename}"
+    
+    for h in headers:
+        h.url_documento = url_documento
+    for item in items:
+        item.url_documento = url_documento
+    db.commit()
+    
+    return {"ok": True, "numero_guia": clean_guia, "url_documento": url_documento}
+
+
+@router.delete(
+    "/guia/{guia_id}",
+    summary="DELETE Eliminar Guía de Despacho e Ítems",
+    description="Elimina la guía de despacho por ID y todos sus ítems asociados."
+)
+def delete_guia_inventario_transitorio(guia_id: int, db: Session = Depends(get_db)):
+    guia = db.query(GuiaInventarioTransitorio).filter(GuiaInventarioTransitorio.id_guia_inventario_transitorio == guia_id).first()
+    if not guia:
+        raise HTTPException(status_code=404, detail="Guía de inventario transitorio no encontrada.")
+
+    db.delete(guia)
+    db.commit()
+    return {"ok": True, "message": f"Guía #{guia_id} y sus productos eliminados exitosamente."}
 
 
 @router.put(

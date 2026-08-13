@@ -41,6 +41,7 @@ class DetalleOrdenServicioInOrdenRead(BaseModel):
 
 class OrdenServicioDetalleCreate(BaseModel):
     id_producto: Optional[int] = None
+    id_especie: Optional[int] = None
     id_unidad_venta: Optional[int] = None
     texto_abierto: Optional[str] = Field(None, max_length=200)
     espesor: Optional[str] = Field(None, max_length=20)

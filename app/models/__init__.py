@@ -29,6 +29,8 @@ from .estado_proforma import EstadoProforma
 from .factura import Factura
 from .forma_pago import FormaPago
 from .gasto import Gasto
+from .guia_inventario_transitorio import GuiaInventarioTransitorio
+from .guia_inventario_puerto import GuiaInventarioPuerto
 from .ide import Ide
 from .inventario_transitorio import InventarioTransitorio
 from .inventario_puerto import InventarioPuerto
@@ -85,6 +87,8 @@ __all__ = [
     "Factura",
     "FormaPago",
     "Gasto",
+    "GuiaInventarioTransitorio",
+    "GuiaInventarioPuerto",
     "Ide",
     "InventarioTransitorio",
     "InventarioPuerto",

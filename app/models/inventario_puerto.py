@@ -8,9 +8,12 @@ class InventarioPuerto(Base):
     __tablename__ = "inventario_puerto"
 
     id_inventario_puerto = Column(Integer, primary_key=True, autoincrement=True)
+    id_guia_inventario_puerto = Column(Integer, ForeignKey("guia_inventario_puerto.id_guia_inventario_puerto", ondelete="CASCADE"), nullable=True)
 
     id_orden_servicio = Column(Integer, ForeignKey("orden_servicio.id_orden_servicio"), nullable=True)
     id_detalle_os = Column(Integer, ForeignKey("detalle_orden_servicio.id_detalle_os"), nullable=True)
+    id_orden_compra = Column(Integer, ForeignKey("orden_compra.id_orden_compra"), nullable=True)
+    id_detalle_odc = Column(Integer, ForeignKey("detalle_orden_compra.id_detalle_odc"), nullable=True)
     id_producto = Column(Integer, ForeignKey("producto.id_producto"), nullable=True)
     id_bodega = Column(Integer, ForeignKey("bodega.id_bodega"), nullable=True)
     id_unidad_venta = Column(Integer, ForeignKey("unidad_venta.id_unidad_venta"), nullable=True)
@@ -36,8 +39,21 @@ class InventarioPuerto(Base):
     piezas = Column(Numeric(12, 3), nullable=True)
 
     fecha_recepcion = Column(Date, default=date.today)
+    numero_guia = Column(String(100), nullable=True)
+    oc = Column(String(100), nullable=True)
+    origen = Column(String(100), nullable=True)
+    oc_compra = Column(String(100), nullable=True)
+    etiqueta = Column(String(100), nullable=True)
+    numero_paquetes = Column(Integer, nullable=True)
+    url_documento = Column(String(500), nullable=True)
     observaciones = Column(String(500), nullable=True)
     estado = Column(String(50), default="RECIBIDO")
+
+    # Relaciones
+    guia = relationship(
+        "GuiaInventarioPuerto",
+        back_populates="detalles",
+    )
 
     # Relaciones viewonly
     OrdenServicio = relationship(
@@ -48,6 +64,11 @@ class InventarioPuerto(Base):
     DetalleOrdenServicio = relationship(
         "DetalleOrdenServicio",
         primaryjoin="foreign(InventarioPuerto.id_detalle_os)==DetalleOrdenServicio.id_detalle_os",
+        viewonly=True,
+    )
+    OrdenCompra = relationship(
+        "OrdenCompra",
+        primaryjoin="foreign(InventarioPuerto.id_orden_compra)==OrdenCompra.id_orden_compra",
         viewonly=True,
     )
     Producto = relationship(
@@ -118,11 +139,31 @@ class InventarioPuerto(Base):
 
         if os and getattr(os, "ClienteProveedor", None):
             proveedor_nombre = getattr(os.ClienteProveedor, "razon_social", None)
+        else:
+            odc = self.OrdenCompra
+            if not odc and self.id_orden_compra:
+                from sqlalchemy.orm import object_session
+                sess = object_session(self)
+                if sess:
+                    from app.models.orden_compra import OrdenCompra
+                    odc = sess.get(OrdenCompra, self.id_orden_compra)
+            if odc and getattr(odc, "ClienteProveedor", None):
+                proveedor_nombre = getattr(odc.ClienteProveedor, "razon_social", None)
+
+        g = self.guia
+        num_guia = self.numero_guia or (g.numero_guia if g else None)
+        oc_val = self.oc or (g.oc if g else None)
+        origen_val = self.origen or (g.origen if g else None)
+        url_doc = self.url_documento or (g.url_documento if g else None)
+        fecha_rec = self.fecha_recepcion or (g.fecha_recepcion if g else None)
 
         return {
             "id_inventario_puerto": self.id_inventario_puerto,
+            "id_guia_inventario_puerto": self.id_guia_inventario_puerto,
             "id_orden_servicio": self.id_orden_servicio,
             "id_detalle_os": self.id_detalle_os,
+            "id_orden_compra": self.id_orden_compra,
+            "id_detalle_odc": self.id_detalle_odc,
             "id_producto": self.id_producto,
             "id_especie": id_especie,
             "producto_nombre": prod_nombre,
@@ -145,7 +186,14 @@ class InventarioPuerto(Base):
             "volumen_eq": _num(self.volumen_eq),
             "precio_eq": _num(self.precio_eq),
             "piezas": _num(self.piezas),
-            "fecha_recepcion": self.fecha_recepcion.isoformat() if self.fecha_recepcion else None,
+            "fecha_recepcion": fecha_rec.isoformat() if hasattr(fecha_rec, "isoformat") else fecha_rec,
+            "numero_guia": num_guia,
+            "oc": oc_val,
+            "origen": origen_val,
+            "oc_compra": self.oc_compra,
+            "etiqueta": self.etiqueta,
+            "numero_paquetes": self.numero_paquetes,
+            "url_documento": url_doc,
             "observaciones": self.observaciones,
             "estado": self.estado,
         }

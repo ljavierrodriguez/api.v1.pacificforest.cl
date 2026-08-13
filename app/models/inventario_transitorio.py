@@ -8,6 +8,7 @@ class InventarioTransitorio(Base):
     __tablename__ = "inventario_transitorio"
 
     id_inventario_transitorio = Column(Integer, primary_key=True, autoincrement=True)
+    id_guia_inventario_transitorio = Column(Integer, ForeignKey("guia_inventario_transitorio.id_guia_inventario_transitorio", ondelete="CASCADE"), nullable=True)
 
     id_orden_compra = Column(Integer, ForeignKey("orden_compra.id_orden_compra"), nullable=True)
     id_detalle_odc = Column(Integer, ForeignKey("detalle_orden_compra.id_detalle_odc"), nullable=True)
@@ -37,10 +38,18 @@ class InventarioTransitorio(Base):
 
     fecha_recepcion = Column(Date, default=date.today)
     numero_guia = Column(String(100), nullable=True)
+    numero_proforma = Column(String(100), nullable=True)
+    etiqueta = Column(String(100), nullable=True)
+    numero_paquetes = Column(Integer, nullable=True)
+    url_documento = Column(String(500), nullable=True)
     observaciones = Column(String(500), nullable=True)
     estado = Column(String(50), default="RECIBIDO")
 
-    # Relaciones viewonly
+    # Relaciones
+    guia = relationship(
+        "GuiaInventarioTransitorio",
+        back_populates="detalles",
+    )
     OrdenCompra = relationship(
         "OrdenCompra",
         primaryjoin="foreign(InventarioTransitorio.id_orden_compra)==OrdenCompra.id_orden_compra",
@@ -120,8 +129,15 @@ class InventarioTransitorio(Base):
         if oc and getattr(oc, "ClienteProveedor", None):
             proveedor_nombre = getattr(oc.ClienteProveedor, "razon_social", None)
 
+        g = self.guia
+        num_guia = self.numero_guia or (g.numero_guia if g else None)
+        num_pf = self.numero_proforma or (g.numero_proforma if g else None)
+        url_doc = self.url_documento or (g.url_documento if g else None)
+        fecha_rec = self.fecha_recepcion or (g.fecha_recepcion if g else None)
+
         return {
             "id_inventario_transitorio": self.id_inventario_transitorio,
+            "id_guia_inventario_transitorio": self.id_guia_inventario_transitorio,
             "id_orden_compra": self.id_orden_compra,
             "id_detalle_odc": self.id_detalle_odc,
             "id_producto": self.id_producto,
@@ -146,8 +162,12 @@ class InventarioTransitorio(Base):
             "volumen_eq": _num(self.volumen_eq),
             "precio_eq": _num(self.precio_eq),
             "piezas": _num(self.piezas),
-            "fecha_recepcion": self.fecha_recepcion.isoformat() if self.fecha_recepcion else None,
-            "numero_guia": self.numero_guia,
+            "fecha_recepcion": fecha_rec.isoformat() if hasattr(fecha_rec, "isoformat") else fecha_rec,
+            "numero_guia": num_guia,
+            "numero_proforma": num_pf,
+            "etiqueta": self.etiqueta,
+            "numero_paquetes": self.numero_paquetes,
+            "url_documento": url_doc,
             "observaciones": self.observaciones,
             "estado": self.estado,
         }

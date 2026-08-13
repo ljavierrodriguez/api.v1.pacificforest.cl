@@ -198,9 +198,11 @@ def create_orden_servicio(payload: OrdenServicioCreate, db: Session = Depends(ge
     db.flush()
 
     for detalle in payload.detalles:
+        det_dict = detalle.model_dump(exclude_unset=True)
+        det_dict.pop("id_especie", None)
         detalle_obj = DetalleOrdenServicio(
             id_orden_servicio=obj.id_orden_servicio,
-            **detalle.model_dump(exclude_unset=True),
+            **det_dict,
         )
         db.add(detalle_obj)
 
