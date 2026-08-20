@@ -75,12 +75,16 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Asegurar que existan las tablas base definidas en los modelos antes de aplicar migraciones
+        Base.metadata.create_all(bind=connection)
+
         context.configure(
             connection=connection, target_metadata=target_metadata
         )
 
         with context.begin_transaction():
             context.run_migrations()
+        connection.commit()
 
 
 if context.is_offline_mode():

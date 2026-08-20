@@ -25,6 +25,9 @@ def upgrade() -> None:
     if _table_exists(bind, "contacto_orden_servicio"):
         return
 
+    if not _table_exists(bind, "contacto") or not _table_exists(bind, "orden_servicio"):
+        return
+
     op.create_table(
         "contacto_orden_servicio",
         sa.Column("id_contacto_orden_servicio", sa.Integer(), primary_key=True, autoincrement=True),
@@ -46,4 +49,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("contacto_orden_servicio")
+    bind = op.get_bind()
+    if _table_exists(bind, "contacto_orden_servicio"):
+        op.drop_table("contacto_orden_servicio")
+

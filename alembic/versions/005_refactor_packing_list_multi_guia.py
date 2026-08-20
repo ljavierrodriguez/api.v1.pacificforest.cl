@@ -22,11 +22,15 @@ def _table_exists(bind, table_name: str) -> bool:
 
 
 def _column_exists(bind, table_name: str, column_name: str) -> bool:
+    if not _table_exists(bind, table_name):
+        return False
     inspector = sa.inspect(bind)
     return any(col["name"] == column_name for col in inspector.get_columns(table_name))
 
 
 def _fk_exists(bind, table_name: str, fk_name: str) -> bool:
+    if not _table_exists(bind, table_name):
+        return False
     inspector = sa.inspect(bind)
     return any((fk.get("name") == fk_name) for fk in inspector.get_foreign_keys(table_name))
 
@@ -81,34 +85,37 @@ def upgrade() -> None:
             ondelete="CASCADE",
         )
 
-    # 1) Create one default guide for each existing packing list.
-    op.execute(
-        """
-        INSERT INTO packing_list_guias (id_packing_list, guia_despacho, fecha_despacho, orden)
-        SELECT
-            pl.id_packing_list,
-            COALESCE(NULLIF(BTRIM(pl.guia_despacho), ''), 'SIN GUIA'),
-            COALESCE(pl.fecha_despacho, CURRENT_DATE),
-            0
-        FROM packing_lists pl
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM packing_list_guias g
-            WHERE g.id_packing_list = pl.id_packing_list
+    # 1) Create one default guide for each existing packing list if legacy column exists.
+    if _column_exists(bind, "packing_lists", "guia_despacho"):
+        op.execute(
+            """
+            INSERT INTO packing_list_guias (id_packing_list, guia_despacho, fecha_despacho, orden)
+            SELECT
+                pl.id_packing_list,
+                COALESCE(NULLIF(BTRIM(pl.guia_despacho), ''), 'SIN GUIA'),
+                COALESCE(pl.fecha_despacho, CURRENT_DATE),
+                0
+            FROM packing_lists pl
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM packing_list_guias g
+                WHERE g.id_packing_list = pl.id_packing_list
+            )
+            """
         )
-        """
-    )
 
     # 2) Re-assign all existing details to the created guide.
-    op.execute(
-        """
-        UPDATE packing_list_detalles d
-        SET id_packing_list_guia = g.id_packing_list_guia
-        FROM packing_list_guias g
-        WHERE d.packing_list_id = g.id_packing_list
-          AND d.id_packing_list_guia IS NULL
-        """
-    )
+    if _table_exists(bind, "packing_list_detalles") and _column_exists(bind, "packing_list_detalles", "id_packing_list_guia") and _table_exists(bind, "packing_list_guias"):
+        op.execute(
+            """
+            UPDATE packing_list_detalles d
+            SET id_packing_list_guia = g.id_packing_list_guia
+            FROM packing_list_guias g
+            WHERE d.packing_list_id = g.id_packing_list
+              AND d.id_packing_list_guia IS NULL
+            """
+        )
+
 
     # 3) Enforce NOT NULL once data is populated.
     if _table_exists(bind, "packing_list_detalles") and _column_exists(

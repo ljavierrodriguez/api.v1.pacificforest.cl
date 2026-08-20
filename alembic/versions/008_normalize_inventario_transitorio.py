@@ -23,6 +23,8 @@ def _table_exists(bind, table_name: str) -> bool:
 
 
 def _column_exists(bind, table_name: str, column_name: str) -> bool:
+    if not _table_exists(bind, table_name):
+        return False
     inspector = sa.inspect(bind)
     return any(col["name"] == column_name for col in inspector.get_columns(table_name))
 
@@ -64,73 +66,75 @@ def upgrade() -> None:
         )
 
     # 3. Data Migration: Group existing inventario_transitorio items into guia_inventario_transitorio headers
-    inv_table = table(
-        "inventario_transitorio",
-        column("id_inventario_transitorio", sa.Integer),
-        column("id_guia_inventario_transitorio", sa.Integer),
-        column("numero_guia", sa.String),
-        column("numero_proforma", sa.String),
-        column("id_orden_compra", sa.Integer),
-        column("id_bodega", sa.Integer),
-        column("fecha_recepcion", sa.Date),
-        column("url_documento", sa.String),
-        column("observaciones", sa.String),
-        column("estado", sa.String),
-    )
-
-    guia_table = table(
-        "guia_inventario_transitorio",
-        column("id_guia_inventario_transitorio", sa.Integer),
-        column("numero_guia", sa.String),
-        column("numero_proforma", sa.String),
-        column("id_orden_compra", sa.Integer),
-        column("id_bodega", sa.Integer),
-        column("fecha_recepcion", sa.Date),
-        column("url_documento", sa.String),
-        column("observaciones", sa.String),
-        column("estado", sa.String),
-    )
-
-    rows = bind.execute(select(inv_table)).fetchall()
-    groups = {}
-    for r in rows:
-        # Group key by guide, oc, date, bodega
-        key = (
-            r.numero_guia,
-            r.id_orden_compra,
-            r.fecha_recepcion,
-            r.id_bodega,
-            r.numero_proforma,
-            r.url_documento,
+    if _table_exists(bind, "inventario_transitorio") and _column_exists(bind, "inventario_transitorio", "numero_guia"):
+        inv_table = table(
+            "inventario_transitorio",
+            column("id_inventario_transitorio", sa.Integer),
+            column("id_guia_inventario_transitorio", sa.Integer),
+            column("numero_guia", sa.String),
+            column("numero_proforma", sa.String),
+            column("id_orden_compra", sa.Integer),
+            column("id_bodega", sa.Integer),
+            column("fecha_recepcion", sa.Date),
+            column("url_documento", sa.String),
+            column("observaciones", sa.String),
+            column("estado", sa.String),
         )
-        if key not in groups:
-            groups[key] = []
-        groups[key].append(r.id_inventario_transitorio)
 
-    for key, item_ids in groups.items():
-        num_guia, id_oc, fecha_rec, id_bodega, num_pf, url_doc = key
-        res = bind.execute(
-            guia_table.insert()
-            .values(
-                numero_guia=num_guia,
-                numero_proforma=num_pf,
-                id_orden_compra=id_oc,
-                id_bodega=id_bodega,
-                fecha_recepcion=fecha_rec,
-                url_documento=url_doc,
-                observaciones=None,
-                estado="RECIBIDO",
-            )
-            .returning(guia_table.c.id_guia_inventario_transitorio)
+        guia_table = table(
+            "guia_inventario_transitorio",
+            column("id_guia_inventario_transitorio", sa.Integer),
+            column("numero_guia", sa.String),
+            column("numero_proforma", sa.String),
+            column("id_orden_compra", sa.Integer),
+            column("id_bodega", sa.Integer),
+            column("fecha_recepcion", sa.Date),
+            column("url_documento", sa.String),
+            column("observaciones", sa.String),
+            column("estado", sa.String),
         )
-        fetched = res.fetchone()
-        header_id = fetched[0] if fetched else None
-        if header_id and item_ids:
-            bind.execute(
-                inv_table.update()
-                .where(inv_table.c.id_inventario_transitorio.in_(item_ids))
-                .values(id_guia_inventario_transitorio=header_id)
+
+        rows = bind.execute(select(inv_table)).fetchall()
+        groups = {}
+        for r in rows:
+            # Group key by guide, oc, date, bodega
+            key = (
+                r.numero_guia,
+                r.id_orden_compra,
+                r.fecha_recepcion,
+                r.id_bodega,
+                r.numero_proforma,
+                r.url_documento,
             )
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(r.id_inventario_transitorio)
+
+        for key, item_ids in groups.items():
+            num_guia, id_oc, fecha_rec, id_bodega, num_pf, url_doc = key
+            res = bind.execute(
+                guia_table.insert()
+                .values(
+                    numero_guia=num_guia,
+                    numero_proforma=num_pf,
+                    id_orden_compra=id_oc,
+                    id_bodega=id_bodega,
+                    fecha_recepcion=fecha_rec,
+                    url_documento=url_doc,
+                    observaciones=None,
+                    estado="RECIBIDO",
+                )
+                .returning(guia_table.c.id_guia_inventario_transitorio)
+            )
+            fetched = res.fetchone()
+            header_id = fetched[0] if fetched else None
+            if header_id and item_ids:
+                bind.execute(
+                    inv_table.update()
+                    .where(inv_table.c.id_inventario_transitorio.in_(item_ids))
+                    .values(id_guia_inventario_transitorio=header_id)
+                )
+
 
 
 def downgrade() -> None:
