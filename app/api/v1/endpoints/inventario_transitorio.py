@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, or_, func
 from typing import Optional, List
 from datetime import date, datetime
 import os
@@ -170,6 +170,102 @@ def get_guias_inventario_transitorio(
         has_next=page < total_pages,
         has_prev=page > 1,
     )
+
+
+@router.get(
+    "/resumen",
+    summary="GET Resumen de Inventario Transitorio",
+    description="Obtener métricas agregadas de volumen, costo y desgloses por bodega y producto."
+)
+def get_resumen_inventario_transitorio(
+    id_bodega: Optional[int] = Query(None, description="Filtrar por ID de bodega"),
+    db: Session = Depends(get_db),
+):
+    from app.models.bodega import Bodega
+    from app.models.producto import Producto
+
+    totals_query = db.query(
+        func.coalesce(func.sum(InventarioTransitorio.volumen), 0).label("volumen"),
+        func.coalesce(func.sum(InventarioTransitorio.volumen_eq), 0).label("volumen_eq"),
+        func.coalesce(func.sum(InventarioTransitorio.subtotal), 0).label("costo"),
+        func.count(InventarioTransitorio.id_inventario_transitorio).label("items_count"),
+        func.coalesce(func.sum(InventarioTransitorio.numero_paquetes), 0).label("paquetes_count"),
+        func.coalesce(func.sum(InventarioTransitorio.piezas), 0).label("piezas_count")
+    )
+    if id_bodega:
+        totals_query = totals_query.filter(InventarioTransitorio.id_bodega == id_bodega)
+    t = totals_query.first()
+
+    q_bodega = (
+        db.query(
+            InventarioTransitorio.id_bodega,
+            func.coalesce(Bodega.nombre, "Sin Bodega").label("bodega_nombre"),
+            func.coalesce(func.sum(InventarioTransitorio.volumen), 0).label("volumen"),
+            func.coalesce(func.sum(InventarioTransitorio.volumen_eq), 0).label("volumen_eq"),
+            func.coalesce(func.sum(InventarioTransitorio.subtotal), 0).label("costo"),
+            func.count(InventarioTransitorio.id_inventario_transitorio).label("items_count"),
+            func.coalesce(func.sum(InventarioTransitorio.numero_paquetes), 0).label("paquetes_count"),
+        )
+        .outerjoin(Bodega, InventarioTransitorio.id_bodega == Bodega.id_bodega)
+    )
+    if id_bodega:
+        q_bodega = q_bodega.filter(InventarioTransitorio.id_bodega == id_bodega)
+    desglose_bodegas = (
+        q_bodega.group_by(InventarioTransitorio.id_bodega, Bodega.nombre)
+        .order_by(desc("costo"))
+        .all()
+    )
+
+    q_producto = (
+        db.query(
+            InventarioTransitorio.id_producto,
+            func.coalesce(Producto.nombre_producto_esp, Producto.nombre_producto_ing, InventarioTransitorio.texto_abierto, "Sin Producto").label("producto_nombre"),
+            func.coalesce(func.sum(InventarioTransitorio.volumen), 0).label("volumen"),
+            func.coalesce(func.sum(InventarioTransitorio.volumen_eq), 0).label("volumen_eq"),
+            func.coalesce(func.sum(InventarioTransitorio.subtotal), 0).label("costo"),
+            func.count(InventarioTransitorio.id_inventario_transitorio).label("items_count"),
+        )
+        .outerjoin(Producto, InventarioTransitorio.id_producto == Producto.id_producto)
+    )
+    if id_bodega:
+        q_producto = q_producto.filter(InventarioTransitorio.id_bodega == id_bodega)
+    desglose_productos = (
+        q_producto.group_by(InventarioTransitorio.id_producto, Producto.nombre_producto_esp, Producto.nombre_producto_ing, InventarioTransitorio.texto_abierto)
+        .order_by(desc("costo"))
+        .all()
+    )
+
+    return {
+        "total_volumen": round(float(t.volumen or 0), 3),
+        "total_volumen_eq": round(float(t.volumen_eq or 0), 3),
+        "total_costo": round(float(t.costo or 0), 2),
+        "total_items": int(t.items_count or 0),
+        "total_paquetes": int(t.paquetes_count or 0),
+        "total_piezas": round(float(t.piezas_count or 0), 2),
+        "desglose_bodegas": [
+            {
+                "id_bodega": b.id_bodega,
+                "nombre": b.bodega_nombre,
+                "volumen": round(float(b.volumen or 0), 3),
+                "volumen_eq": round(float(b.volumen_eq or 0), 3),
+                "costo": round(float(b.costo or 0), 2),
+                "items_count": int(b.items_count or 0),
+                "paquetes_count": int(b.paquetes_count or 0),
+            }
+            for b in desglose_bodegas
+        ],
+        "desglose_productos": [
+            {
+                "id_producto": p.id_producto,
+                "nombre": p.producto_nombre,
+                "volumen": round(float(p.volumen or 0), 3),
+                "volumen_eq": round(float(p.volumen_eq or 0), 3),
+                "costo": round(float(p.costo or 0), 2),
+                "items_count": int(p.items_count or 0),
+            }
+            for p in desglose_productos
+        ],
+    }
 
 
 @router.get(
