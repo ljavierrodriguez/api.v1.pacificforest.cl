@@ -203,9 +203,16 @@ def get_guia_costo_servicio_stats(
     guias = query.all()
 
     total_guias_count = len(guias)
-    total_costo_usd = sum(float(g.total_usd or 0) for g in guias)
+    
+    # Calculate exact cost sum from details (or header if empty)
+    total_costo_usd = 0.0
+    for g in guias:
+        if g.detalles:
+            total_costo_usd += sum(float(d.total_usd or 0) for d in g.detalles)
+        else:
+            total_costo_usd += float(g.total_usd or 0)
+
     total_volumen_m3 = sum(float(g.total_m3 or 0) for g in guias)
-    tarifa_promedio_usd_m3 = round(total_costo_usd / total_volumen_m3, 2) if total_volumen_m3 > 0 else 0.0
 
     # Desglose por Servicio
     servicios_map = {}
@@ -215,17 +222,19 @@ def get_guia_costo_servicio_stats(
     mensual_map = {}
 
     for g in guias:
+        g_cost = sum(float(d.total_usd or 0) for d in g.detalles) if g.detalles else float(g.total_usd or 0)
+        
         o_name = g.origen or "Sin Origen"
         if o_name not in origen_map:
             origen_map[o_name] = {"origen": o_name, "total_usd": 0.0, "total_m3": 0.0, "guias_count": 0}
-        origen_map[o_name]["total_usd"] += float(g.total_usd or 0)
+        origen_map[o_name]["total_usd"] += g_cost
         origen_map[o_name]["total_m3"] += float(g.total_m3 or 0)
         origen_map[o_name]["guias_count"] += 1
 
         m_key = g.fecha_despacho.strftime("%Y-%m") if g.fecha_despacho else "Sin Fecha"
         if m_key not in mensual_map:
             mensual_map[m_key] = {"mes_anio": m_key, "total_usd": 0.0, "total_m3": 0.0, "guias_count": 0}
-        mensual_map[m_key]["total_usd"] += float(g.total_usd or 0)
+        mensual_map[m_key]["total_usd"] += g_cost
         mensual_map[m_key]["total_m3"] += float(g.total_m3 or 0)
         mensual_map[m_key]["guias_count"] += 1
 
@@ -243,6 +252,8 @@ def get_guia_costo_servicio_stats(
                 servicios_map[s_name]["total_usd"] += float(d.total_usd or 0)
                 servicios_map[s_name]["total_m3"] += float(d.volumen_m3 or 0)
                 servicios_map[s_name]["cantidad_registros"] += 1
+
+    total_volumen_servicios_m3 = sum(s_data["total_m3"] for s_data in servicios_map.values())
 
     desglose_servicios = []
     for s_name, s_data in servicios_map.items():
@@ -269,10 +280,15 @@ def get_guia_costo_servicio_stats(
         m_data["total_m3"] = round(m_data["total_m3"], 4)
         desglose_mensual.append(m_data)
 
+    tarifa_promedio_usd_m3 = round(total_costo_usd / total_volumen_m3, 2) if total_volumen_m3 > 0 else 0.0
+    tarifa_promedio_servicio_usd_m3 = round(total_costo_usd / total_volumen_servicios_m3, 2) if total_volumen_servicios_m3 > 0 else 0.0
+
     return {
         "total_costo_usd": round(total_costo_usd, 2),
         "total_volumen_m3": round(total_volumen_m3, 4),
+        "total_volumen_servicios_m3": round(total_volumen_servicios_m3, 4),
         "tarifa_promedio_usd_m3": tarifa_promedio_usd_m3,
+        "tarifa_promedio_servicio_usd_m3": tarifa_promedio_servicio_usd_m3,
         "total_guias_count": total_guias_count,
         "desglose_servicios": desglose_servicios,
         "desglose_origen": desglose_origen,
@@ -289,6 +305,18 @@ def get_guia_costo_servicio_by_id(
     if not guia:
         raise HTTPException(status_code=444, detail="Guía de costo de servicio no encontrada.")
     return guia.to_dict()
+
+
+@router.delete("/all/bulk-delete", status_code=status.HTTP_200_OK)
+def delete_all_guias_costo_servicio(
+    db: Session = Depends(get_db),
+):
+    guias = db.query(GuiaCostoServicio).all()
+    count = len(guias)
+    for g in guias:
+        db.delete(g)
+    db.commit()
+    return {"message": f"Se eliminaron {count} guías de costo de servicio correctamente.", "deleted_count": count}
 
 
 @router.delete("/{id_guia_costo_servicio}", status_code=status.HTTP_200_OK)
