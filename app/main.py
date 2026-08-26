@@ -65,6 +65,22 @@ def log_database_target() -> None:
     except Exception:
         print("[DB] No se pudo parsear DATABASE_URL_DB")
 
+    try:
+        from app.db.session import SessionLocalDB
+        import app.models
+        from app.models.estado_orden_servicio import EstadoOrdenServicio
+
+        db = SessionLocalDB()
+        estados_default = [(1, "PENDIENTE"), (2, "EN PROCESO"), (3, "CUMPLIDA"), (4, "ANULADA")]
+        for eid, nombre in estados_default:
+            existing = db.query(EstadoOrdenServicio).filter_by(id_estado_orden_servicio=eid).first()
+            if not existing:
+                db.add(EstadoOrdenServicio(id_estado_orden_servicio=eid, nombre=nombre))
+        db.commit()
+        db.close()
+    except Exception as err:
+        print(f"[DB] Seed estado_orden_servicio error: {err}")
+
 
 def get_docs_user_from_cookie(request: Request):
     token = None

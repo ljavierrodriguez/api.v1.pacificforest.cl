@@ -7,11 +7,20 @@ from .clausula_venta import ClausulaVenta
 from .cliente_proveedor import ClienteProveedor
 from .contacto import Contacto
 from .contacto_orden_compra import ContactoOrdenCompra
+from .contacto_orden_servicio import ContactoOrdenServicio
 from .contacto_proforma import ContactoProforma
 from .contenedor import Contenedor
 from .detalle_factura import DetalleFactura
 from .detalle_gasto import DetalleGasto
 from .detalle_ide import DetalleIde
+from .guia_costo_servicio import (
+    GuiaCostoServicio,
+    DetalleCostoServicio,
+    GuiaCostoProductoTerminado,
+    GuiaCostoDetalleProceso,
+    guia_costo_servicio_os,
+    guia_costo_servicio_oc,
+)
 from .detalle_orden_compra import DetalleOrdenCompra
 from .detalle_orden_servicio import DetalleOrdenServicio
 from .detalle_pl import DetallePl
@@ -65,11 +74,16 @@ __all__ = [
     "ClienteProveedor",
     "Contacto",
     "ContactoOrdenCompra",
+    "ContactoOrdenServicio",
     "ContactoProforma", 
     "Contenedor",
     "DetalleFactura",
     "DetalleGasto",
     "DetalleIde",
+    "GuiaCostoServicio",
+    "DetalleCostoServicio",
+    "guia_costo_servicio_os",
+    "guia_costo_servicio_oc",
     "DetalleOrdenCompra",
     "DetalleOrdenServicio",
     "DetallePl",

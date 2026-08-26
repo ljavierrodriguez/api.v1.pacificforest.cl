@@ -25,7 +25,7 @@ class UserBase(BaseModel):
     rut: str = Field(..., description="RUT del usuario")
     login: str = Field(..., description="Descripción de login")
     nombre: str = Field(..., description="Descripción de nombre")
-    correo: EmailStr = Field(..., description="Descripción de correo")
+    correo: str = Field(..., description="Descripción de correo")
     telefono: str = Field(..., description="Teléfono del usuario")
 
 

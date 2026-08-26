@@ -31,6 +31,7 @@ from .estado_proforma import router as estado_proforma_router
 from .factura import router as factura_router
 from .forma_pago import router as forma_pago_router
 from .gasto import router as gasto_router
+from .guia_costo_servicio import router as guia_costo_servicio_router
 from .ide import router as ide_router
 from .inventario_transitorio import router as inventario_transitorio_router
 from .inventario_puerto import router as inventario_puerto_router
@@ -88,6 +89,7 @@ router.include_router(estado_proforma_router)
 router.include_router(factura_router)
 router.include_router(forma_pago_router)
 router.include_router(gasto_router)
+router.include_router(guia_costo_servicio_router, prefix="/guia-costo-servicio", tags=["Guía Costo Servicio"])
 router.include_router(ide_router)
 router.include_router(inventario_transitorio_router)
 router.include_router(inventario_puerto_router)
