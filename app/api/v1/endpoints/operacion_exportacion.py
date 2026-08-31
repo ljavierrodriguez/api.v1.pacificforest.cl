@@ -149,6 +149,16 @@ def search_operacion(
     notificar_q: str | None = Query(None, description="Buscar por cliente de notificación"),
     puerto_origen_q: str | None = Query(None, description="Buscar por puerto de origen"),
     puerto_destino_q: str | None = Query(None, description="Buscar por puerto de destino"),
+    facturar_a: int | None = Query(None, description="Filtrar por ID de cliente facturar"),
+    consignar_a: int | None = Query(None, description="Filtrar por ID de cliente consignar"),
+    notificar_a: int | None = Query(None, description="Filtrar por ID de cliente notificar"),
+    id_puerto_origen: int | None = Query(None, description="Filtrar por ID de puerto origen"),
+    id_puerto_destino: int | None = Query(None, description="Filtrar por ID de puerto destino"),
+    id_forma_pago: int | None = Query(None, description="Filtrar por ID de forma de pago"),
+    id_estado_oe: int | None = Query(None, description="Filtrar por ID de estado OE"),
+    fecha_desde: str | None = Query(None, description="Filtrar desde fecha de emisión (YYYY-MM-DD)"),
+    fecha_hasta: str | None = Query(None, description="Filtrar hasta fecha de emisión (YYYY-MM-DD)"),
+    tiene_proforma: str | None = Query(None, description="Filtrar por proforma: con-proforma o sin-proforma"),
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
     db: Session = Depends(get_db)
@@ -159,6 +169,38 @@ def search_operacion(
 
     if oe_id is not None:
         base_query = base_query.filter(OperacionExportacion.id_operacion_exportacion == oe_id)
+
+    if facturar_a is not None:
+        base_query = base_query.filter(OperacionExportacion.facturar_a == facturar_a)
+
+    if consignar_a is not None:
+        base_query = base_query.filter(OperacionExportacion.consignar_a == consignar_a)
+
+    if notificar_a is not None:
+        base_query = base_query.filter(OperacionExportacion.notificar_a == notificar_a)
+
+    if id_puerto_origen is not None:
+        base_query = base_query.filter(OperacionExportacion.id_puerto_origen == id_puerto_origen)
+
+    if id_puerto_destino is not None:
+        base_query = base_query.filter(OperacionExportacion.id_puerto_destino == id_puerto_destino)
+
+    if id_forma_pago is not None:
+        base_query = base_query.filter(OperacionExportacion.id_forma_pago == id_forma_pago)
+
+    if id_estado_oe is not None:
+        base_query = base_query.filter(OperacionExportacion.id_estado_oe == id_estado_oe)
+
+    if fecha_desde:
+        base_query = base_query.filter(OperacionExportacion.fecha >= fecha_desde)
+
+    if fecha_hasta:
+        base_query = base_query.filter(OperacionExportacion.fecha <= fecha_hasta)
+
+    if tiene_proforma == "con-proforma":
+        base_query = base_query.filter(Proforma.id_proforma.isnot(None))
+    elif tiene_proforma == "sin-proforma":
+        base_query = base_query.filter(Proforma.id_proforma.is_(None))
 
     def _contains(value: str | None):
         return f"%{value.strip()}%" if value and value.strip() else None
