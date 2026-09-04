@@ -385,7 +385,7 @@ def recepcionar_orden_servicio(
                     esp = item_override.espesor if item_override.espesor is not None else d.espesor
                     anc = item_override.ancho if item_override.ancho is not None else d.ancho
                     lar = item_override.largo if item_override.largo is not None else d.largo
-                    txt = item_override.texto_abierto if item_override.texto_abierto is not None else d.texto_abierto
+                    calc_subtotal = round(float(cant or vol_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((cant or vol_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
 
                     inv = InventarioPuerto(
                         id_guia_inventario_puerto=guia_header.id_guia_inventario_puerto,
@@ -403,7 +403,7 @@ def recepcionar_orden_servicio(
                         id_unidad_medida_largo=d.id_unidad_medida_largo,
                         cantidad=cant,
                         precio_unitario=d.precio_unitario,
-                        subtotal=d.subtotal,
+                        subtotal=calc_subtotal,
                         volumen=vol,
                         volumen_eq=vol_eq,
                         precio_eq=d.precio_eq,
@@ -423,6 +423,7 @@ def recepcionar_orden_servicio(
                     created_items.append(inv)
             else:
                 for d in detalles:
+                    calc_subtotal = round(float(d.cantidad or d.volumen_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((d.cantidad or d.volumen_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
                     inv = InventarioPuerto(
                         id_guia_inventario_puerto=guia_header.id_guia_inventario_puerto,
                         id_orden_servicio=os_obj.id_orden_servicio,
@@ -439,7 +440,7 @@ def recepcionar_orden_servicio(
                         id_unidad_medida_largo=d.id_unidad_medida_largo,
                         cantidad=d.cantidad,
                         precio_unitario=d.precio_unitario,
-                        subtotal=d.subtotal,
+                        subtotal=calc_subtotal,
                         volumen=d.volumen,
                         volumen_eq=d.volumen_eq,
                         precio_eq=d.precio_eq,
@@ -511,7 +512,7 @@ def recepcionar_orden_servicio(
                 id_unidad_medida_largo=d.id_unidad_medida_largo,
                 cantidad=cant,
                 precio_unitario=d.precio_unitario,
-                subtotal=d.subtotal,
+                subtotal=round(float(cant or vol_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((cant or vol_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal,
                 volumen=vol,
                 volumen_eq=vol_eq,
                 precio_eq=d.precio_eq,
@@ -615,6 +616,7 @@ def recepcionar_orden_compra_puerto(
                     anc = item_override.ancho if item_override.ancho is not None else d.ancho
                     lar = item_override.largo if item_override.largo is not None else d.largo
                     txt = item_override.texto_abierto if item_override.texto_abierto is not None else d.texto_abierto
+                    calc_subtotal = round(float(cant or vol_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((cant or vol_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
 
                     inv = InventarioPuerto(
                         id_guia_inventario_puerto=guia_header.id_guia_inventario_puerto,
@@ -632,7 +634,7 @@ def recepcionar_orden_compra_puerto(
                         id_unidad_medida_largo=d.id_unidad_medida_largo,
                         cantidad=cant,
                         precio_unitario=d.precio_unitario,
-                        subtotal=d.subtotal,
+                        subtotal=calc_subtotal,
                         volumen=vol,
                         volumen_eq=vol_eq,
                         precio_eq=d.precio_eq,
@@ -652,6 +654,7 @@ def recepcionar_orden_compra_puerto(
                     created_items.append(inv)
             else:
                 for d in detalles:
+                    calc_subtotal = round(float(d.cantidad or d.volumen_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((d.cantidad or d.volumen_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
                     inv = InventarioPuerto(
                         id_guia_inventario_puerto=guia_header.id_guia_inventario_puerto,
                         id_orden_compra=oc_obj.id_orden_compra,
@@ -668,7 +671,7 @@ def recepcionar_orden_compra_puerto(
                         id_unidad_medida_largo=d.id_unidad_medida_largo,
                         cantidad=d.cantidad,
                         precio_unitario=d.precio_unitario,
-                        subtotal=d.subtotal,
+                        subtotal=calc_subtotal,
                         volumen=d.volumen,
                         volumen_eq=d.volumen_eq,
                         precio_eq=d.precio_eq,
@@ -723,6 +726,7 @@ def recepcionar_orden_compra_puerto(
             anc = item_override.ancho if (item_override and item_override.ancho is not None) else d.ancho
             lar = item_override.largo if (item_override and item_override.largo is not None) else d.largo
             txt = item_override.texto_abierto if (item_override and item_override.texto_abierto is not None) else d.texto_abierto
+            calc_subtotal = round(float(cant or vol_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((cant or vol_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
 
             inv = InventarioPuerto(
                 id_guia_inventario_puerto=guia_header.id_guia_inventario_puerto,
@@ -740,7 +744,7 @@ def recepcionar_orden_compra_puerto(
                 id_unidad_medida_largo=d.id_unidad_medida_largo,
                 cantidad=cant,
                 precio_unitario=d.precio_unitario,
-                subtotal=d.subtotal,
+                subtotal=calc_subtotal,
                 volumen=vol,
                 volumen_eq=vol_eq,
                 precio_eq=d.precio_eq,
