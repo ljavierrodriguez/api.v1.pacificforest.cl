@@ -325,7 +325,15 @@ def search_orden_compra(
     id_orden_compra: Optional[int] = Query(None, description="Filtrar por N° exacto de orden de compra"),
     id_proforma: Optional[int] = Query(None, description="Filtrar por N° de proforma"),
     id_operacion_exportacion: Optional[int] = Query(None, description="Filtrar por N° de operación de exportación"),
-    proveedor: Optional[str] = Query(None, description="Buscar por razón social del proveedor"),
+    proveedor: Optional[str] = Query(None, description="Buscar por ID o razón social del proveedor"),
+    id_cliente_proveedor: Optional[int] = Query(None, description="ID exacto del cliente/proveedor"),
+    id_estado_odc: Optional[int] = Query(None, description="ID del estado ODC"),
+    id_empresa: Optional[int] = Query(None, description="ID de empresa"),
+    id_moneda: Optional[int] = Query(None, description="ID de moneda"),
+    id_bodega: Optional[int] = Query(None, description="ID de bodega"),
+    tipo: Optional[str] = Query(None, description="Tipo de orden ('Directa', 'Asignada')"),
+    fecha_desde: Optional[str] = Query(None, description="Fecha de emisión desde (YYYY-MM-DD)"),
+    fecha_hasta: Optional[str] = Query(None, description="Fecha de emisión hasta (YYYY-MM-DD)"),
     usuario_encargado: Optional[str] = Query(None, description="Buscar por nombre del usuario encargado"),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=1000),
@@ -368,7 +376,7 @@ def search_orden_compra(
         OperacionExportacion, Proforma.id_operacion_exportacion == OperacionExportacion.id_operacion_exportacion
     )
 
-    if query:
+    if query and query.strip():
         search_term = f"%{query.strip()}%"
         base_query = base_query.filter(
             or_(
@@ -382,7 +390,8 @@ def search_orden_compra(
                 Empresa.nombre_fantasia.ilike(search_term),
             )
         )
-    elif id_orden_compra is not None:
+
+    if id_orden_compra is not None:
         base_query = base_query.filter(
             OrdenCompra.id_orden_compra == id_orden_compra
         )
@@ -395,14 +404,49 @@ def search_orden_compra(
             OperacionExportacion.id_operacion_exportacion == id_operacion_exportacion
         )
 
-    if proveedor is not None:
+    if id_cliente_proveedor is not None:
         base_query = base_query.filter(
-            ClienteProveedor.razon_social.ilike(f"%{proveedor}%")
+            OrdenCompra.id_cliente_proveedor == id_cliente_proveedor
         )
+    elif proveedor and proveedor.strip():
+        p_val = proveedor.strip()
+        if p_val.isdigit():
+            base_query = base_query.filter(OrdenCompra.id_cliente_proveedor == int(p_val))
+        else:
+            base_query = base_query.filter(
+                or_(
+                    ClienteProveedor.razon_social.ilike(f"%{p_val}%"),
+                    ClienteProveedor.nombre_fantasia.ilike(f"%{p_val}%")
+                )
+            )
 
-    if usuario_encargado is not None:
+    if id_estado_odc is not None:
+        base_query = base_query.filter(OrdenCompra.id_estado_odc == id_estado_odc)
+
+    if id_empresa is not None:
+        base_query = base_query.filter(OrdenCompra.id_empresa == id_empresa)
+
+    if id_moneda is not None:
+        base_query = base_query.filter(OrdenCompra.id_moneda == id_moneda)
+
+    if id_bodega is not None:
+        base_query = base_query.filter(OrdenCompra.id_bodega == id_bodega)
+
+    if tipo and tipo.strip() and tipo.strip() != "todos":
+        if tipo.strip() == "Directa":
+            base_query = base_query.filter(OrdenCompra.id_proforma.is_(None))
+        elif tipo.strip() == "Asignada":
+            base_query = base_query.filter(OrdenCompra.id_proforma.isnot(None))
+
+    if fecha_desde and fecha_desde.strip():
+        base_query = base_query.filter(OrdenCompra.fecha_emision >= fecha_desde.strip())
+
+    if fecha_hasta and fecha_hasta.strip():
+        base_query = base_query.filter(OrdenCompra.fecha_emision <= fecha_hasta.strip())
+
+    if usuario_encargado and usuario_encargado.strip():
         base_query = base_query.filter(
-            User.nombre.ilike(f"%{usuario_encargado}%")
+            User.nombre.ilike(f"%{usuario_encargado.strip()}%")
         )
 
     total_items = base_query.count()

@@ -268,7 +268,18 @@ def search_proforma(
     id_proforma: Optional[int] = Query(None, description="Filtrar por ID de proforma"),
     id_operacion_exportacion: Optional[int] = Query(None, description="Filtrar por ID de operación de exportación"),
     id_usuario_encargado: Optional[int] = Query(None, description="Filtrar por ID de usuario encargado"),
-    facturar_a: Optional[str] = Query(None, description="Buscar por razón social del cliente a facturar (búsqueda parcial)"),
+    facturar_a: Optional[str] = Query(None, description="ID o nombre del cliente a facturar"),
+    consignar_a: Optional[str] = Query(None, description="ID o nombre del cliente a consignar"),
+    notificar_a: Optional[str] = Query(None, description="ID o nombre del cliente a notificar"),
+    id_estado_proforma: Optional[int] = Query(None, description="Filtrar por estado de proforma"),
+    id_empresa: Optional[int] = Query(None, description="Filtrar por empresa"),
+    id_moneda: Optional[int] = Query(None, description="Filtrar por moneda"),
+    id_forma_pago: Optional[int] = Query(None, description="Filtrar por forma de pago"),
+    id_puerto_origen: Optional[int] = Query(None, description="Filtrar por puerto de origen"),
+    id_puerto_destino: Optional[int] = Query(None, description="Filtrar por puerto de destino"),
+    fecha_desde: Optional[str] = Query(None, description="Fecha emisión desde (YYYY-MM-DD)"),
+    fecha_hasta: Optional[str] = Query(None, description="Fecha emisión hasta (YYYY-MM-DD)"),
+    estado_flujo: Optional[str] = Query(None, description="Estado del flujo ('sin-oc', 'parcial', 'completado')"),
     q: Optional[str] = Query(None, description="Búsqueda global por texto o ID"),
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(10, ge=1, le=1000, description="Tamaño de página"),
@@ -368,9 +379,8 @@ def search_proforma(
      .outerjoin(PuertoOrigenAlias, OE.id_puerto_origen == PuertoOrigenAlias.id_puerto)\
      .outerjoin(PuertoDestinoAlias, OE.id_puerto_destino == PuertoDestinoAlias.id_puerto)
 
-    search_term = q or facturar_a
-    if search_term and search_term.strip():
-        st = f"%{search_term.strip()}%"
+    if q and q.strip():
+        st = f"%{q.strip()}%"
         base_query = base_query.filter(
             or_(
                 cast(Proforma.id_proforma, String).ilike(st),
@@ -388,13 +398,66 @@ def search_proforma(
                 PuertoDestinoAlias.nombre.ilike(st),
             )
         )
-    else:
-        if id_proforma is not None:
-            base_query = base_query.filter(Proforma.id_proforma == id_proforma)
-        if id_operacion_exportacion is not None:
-            base_query = base_query.filter(Proforma.id_operacion_exportacion == id_operacion_exportacion)
-        if id_usuario_encargado is not None:
-            base_query = base_query.filter(Proforma.id_usuario_encargado == id_usuario_encargado)
+
+    if id_proforma is not None:
+        base_query = base_query.filter(Proforma.id_proforma == id_proforma)
+    if id_operacion_exportacion is not None:
+        base_query = base_query.filter(Proforma.id_operacion_exportacion == id_operacion_exportacion)
+    if id_usuario_encargado is not None:
+        base_query = base_query.filter(Proforma.id_usuario_encargado == id_usuario_encargado)
+
+    if facturar_a and facturar_a.strip():
+        f_val = facturar_a.strip()
+        if f_val.isdigit():
+            base_query = base_query.filter(func.coalesce(DirFacturar.id_cliente_proveedor, OE.facturar_a) == int(f_val))
+        else:
+            base_query = base_query.filter(
+                or_(
+                    CPFacturar.razon_social.ilike(f"%{f_val}%"),
+                    CPFacturar.nombre_fantasia.ilike(f"%{f_val}%")
+                )
+            )
+
+    if consignar_a and consignar_a.strip():
+        c_val = consignar_a.strip()
+        if c_val.isdigit():
+            base_query = base_query.filter(func.coalesce(DirConsignar.id_cliente_proveedor, OE.consignar_a) == int(c_val))
+        else:
+            base_query = base_query.filter(
+                or_(
+                    CPConsignar.razon_social.ilike(f"%{c_val}%"),
+                    CPConsignar.nombre_fantasia.ilike(f"%{c_val}%")
+                )
+            )
+
+    if notificar_a and notificar_a.strip():
+        n_val = notificar_a.strip()
+        if n_val.isdigit():
+            base_query = base_query.filter(func.coalesce(DirNotificar.id_cliente_proveedor, OE.notificar_a) == int(n_val))
+        else:
+            base_query = base_query.filter(
+                or_(
+                    CPNotificar.razon_social.ilike(f"%{n_val}%"),
+                    CPNotificar.nombre_fantasia.ilike(f"%{n_val}%")
+                )
+            )
+
+    if id_estado_proforma is not None:
+        base_query = base_query.filter(Proforma.id_estado_proforma == id_estado_proforma)
+    if id_empresa is not None:
+        base_query = base_query.filter(Proforma.id_empresa == id_empresa)
+    if id_moneda is not None:
+        base_query = base_query.filter(Proforma.id_moneda == id_moneda)
+    if id_forma_pago is not None:
+        base_query = base_query.filter(OE.id_forma_pago == id_forma_pago)
+    if id_puerto_origen is not None:
+        base_query = base_query.filter(OE.id_puerto_origen == id_puerto_origen)
+    if id_puerto_destino is not None:
+        base_query = base_query.filter(OE.id_puerto_destino == id_puerto_destino)
+    if fecha_desde and fecha_desde.strip():
+        base_query = base_query.filter(Proforma.fecha_emision >= fecha_desde.strip())
+    if fecha_hasta and fecha_hasta.strip():
+        base_query = base_query.filter(Proforma.fecha_emision <= fecha_hasta.strip())
 
     total_items = base_query.count()
 
