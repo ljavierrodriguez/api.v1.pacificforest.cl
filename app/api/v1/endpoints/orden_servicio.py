@@ -274,8 +274,16 @@ def list_orden_servicio(
 @router.get("/search", response_model=PaginatedOrdenServicioResponse)
 def search_orden_servicio(
     id_orden_servicio: Optional[int] = Query(None),
+    id_orden_compra: Optional[int] = Query(None),
+    id_cliente_proveedor: Optional[int] = Query(None),
+    id_estado_orden_servicio: Optional[int] = Query(None),
+    id_empresa: Optional[int] = Query(None),
+    id_moneda: Optional[int] = Query(None),
+    fecha_desde: Optional[str] = Query(None),
+    fecha_hasta: Optional[str] = Query(None),
     proveedor: Optional[str] = Query(None),
     usuario_encargado: Optional[str] = Query(None),
+    query: Optional[str] = Query(None),
     q: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=1000),
@@ -303,12 +311,13 @@ def search_orden_servicio(
      .outerjoin(Empresa, OrdenServicio.id_empresa == Empresa.id_empresa)\
      .outerjoin(EstadoOrdenServicio, OrdenServicio.id_estado_orden_servicio == EstadoOrdenServicio.id_estado_orden_servicio)
 
-    search_term = q or proveedor
+    search_term = query or q or proveedor
     if search_term and search_term.strip():
         st = f"%{search_term.strip()}%"
         base_query = base_query.filter(
             or_(
                 cast(OrdenServicio.id_orden_servicio, String).ilike(st),
+                cast(OrdenServicio.id_orden_compra, String).ilike(st),
                 OrdenServicio.servicio.ilike(st),
                 OrdenServicio.destino.ilike(st),
                 ClienteProveedor.razon_social.ilike(st),
@@ -318,11 +327,36 @@ def search_orden_servicio(
                 Empresa.nombre_fantasia.ilike(st),
             )
         )
-    elif id_orden_servicio is not None:
-        base_query = base_query.filter(OrdenServicio.id_orden_servicio == id_orden_servicio)
 
-    if usuario_encargado is not None and not search_term:
-        base_query = base_query.filter(User.nombre.ilike(f"%{usuario_encargado}%"))
+    if id_orden_servicio is not None:
+        base_query = base_query.filter(OrdenServicio.id_orden_servicio == id_orden_servicio)
+    if id_orden_compra is not None:
+        base_query = base_query.filter(OrdenServicio.id_orden_compra == id_orden_compra)
+    if id_cliente_proveedor is not None:
+        base_query = base_query.filter(OrdenServicio.id_cliente_proveedor == id_cliente_proveedor)
+    if id_estado_orden_servicio is not None:
+        base_query = base_query.filter(OrdenServicio.id_estado_orden_servicio == id_estado_orden_servicio)
+    if id_empresa is not None:
+        base_query = base_query.filter(OrdenServicio.id_empresa == id_empresa)
+    if id_moneda is not None:
+        base_query = base_query.filter(OrdenServicio.id_moneda == id_moneda)
+
+    if fecha_desde and fecha_desde.strip():
+        try:
+            d_desde = datetime.strptime(fecha_desde.strip().split("T")[0], "%Y-%m-%d").date()
+            base_query = base_query.filter(func.date(OrdenServicio.fecha_emision) >= d_desde)
+        except Exception:
+            pass
+
+    if fecha_hasta and fecha_hasta.strip():
+        try:
+            d_hasta = datetime.strptime(fecha_hasta.strip().split("T")[0], "%Y-%m-%d").date()
+            base_query = base_query.filter(func.date(OrdenServicio.fecha_emision) <= d_hasta)
+        except Exception:
+            pass
+
+    if usuario_encargado and usuario_encargado.strip() and not search_term:
+        base_query = base_query.filter(User.nombre.ilike(f"%{usuario_encargado.strip()}%"))
 
     total_items = base_query.count()
 
