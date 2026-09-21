@@ -33,6 +33,7 @@ class GuiaCostoServicio(Base):
     oc_compra_ref = Column(String(200), nullable=True)
 
     total_m3 = Column(Numeric(12, 4), nullable=True)
+    flejes_2da = Column(Numeric(12, 4), nullable=True)
     total_usd = Column(Numeric(12, 2), nullable=True)
     observaciones = Column(Text, nullable=True)
     url_documento = Column(String(500), nullable=True)
@@ -59,6 +60,20 @@ class GuiaCostoServicio(Base):
         order_by="GuiaCostoDetalleProceso.id_detalle_proceso",
     )
 
+    resumen_general = relationship(
+        "GuiaCostoResumenGeneral",
+        back_populates="guia_costo",
+        cascade="all, delete-orphan",
+        order_by="GuiaCostoResumenGeneral.id_resumen_general",
+    )
+
+    stock_planta = relationship(
+        "GuiaCostoStockPlanta",
+        back_populates="guia_costo",
+        cascade="all, delete-orphan",
+        order_by="GuiaCostoStockPlanta.id_stock_planta",
+    )
+
     ordenes_servicio = relationship(
         "OrdenServicio",
         secondary=guia_costo_servicio_os,
@@ -78,6 +93,8 @@ class GuiaCostoServicio(Base):
         detalles_list = [d.to_dict() for d in self.detalles] if self.detalles else []
         prod_term_list = [p.to_dict() for p in self.productos_terminados] if self.productos_terminados else []
         proceso_list = [pr.to_dict() for pr in self.detalles_proceso] if self.detalles_proceso else []
+        resumen_list = [r.to_dict() for r in self.resumen_general] if self.resumen_general else []
+        stock_list = [s.to_dict() for s in self.stock_planta] if self.stock_planta else []
 
         os_ids = [os.id_orden_servicio for os in self.ordenes_servicio] if self.ordenes_servicio else []
         oc_ids = [oc.id_orden_compra for oc in self.ordenes_compra] if self.ordenes_compra else []
@@ -94,6 +111,7 @@ class GuiaCostoServicio(Base):
             "destino": self.destino,
             "oc_compra_ref": self.oc_compra_ref,
             "total_m3": float(self.total_m3) if self.total_m3 is not None else None,
+            "flejes_2da": float(self.flejes_2da) if self.flejes_2da is not None else None,
             "total_usd": float(self.total_usd) if self.total_usd is not None else round(calc_total_usd, 2),
             "observaciones": self.observaciones,
             "url_documento": self.url_documento,
@@ -102,6 +120,8 @@ class GuiaCostoServicio(Base):
             "detalles": detalles_list,
             "productos_terminados": prod_term_list,
             "detalles_proceso": proceso_list,
+            "resumen_general": resumen_list,
+            "stock_planta": stock_list,
         }
 
 
@@ -216,3 +236,62 @@ class GuiaCostoDetalleProceso(Base):
             "volumen_m3_salida": float(self.volumen_m3_salida) if self.volumen_m3_salida is not None else None,
             "proceso": self.proceso,
         }
+
+
+class GuiaCostoResumenGeneral(Base):
+    __tablename__ = "guia_costo_resumen_general"
+
+    id_resumen_general = Column(Integer, primary_key=True, index=True)
+    id_guia_costo_servicio = Column(
+        Integer,
+        ForeignKey("guia_costo_servicio.id_guia_costo_servicio", ondelete="CASCADE"),
+        nullable=False,
+    )
+    oc_tabla = Column(String(100), nullable=True)
+    movimiento = Column(String(100), nullable=True)
+    volumen_m3 = Column(Numeric(12, 4), nullable=True)
+    estado = Column(String(100), nullable=True)
+
+    guia_costo = relationship("GuiaCostoServicio", back_populates="resumen_general")
+
+    def to_dict(self):
+        return {
+            "id_resumen_general": self.id_resumen_general,
+            "id_guia_costo_servicio": self.id_guia_costo_servicio,
+            "oc_tabla": self.oc_tabla,
+            "movimiento": self.movimiento,
+            "volumen_m3": float(self.volumen_m3) if self.volumen_m3 is not None else None,
+            "estado": self.estado,
+        }
+
+
+class GuiaCostoStockPlanta(Base):
+    __tablename__ = "guia_costo_stock_planta"
+
+    id_stock_planta = Column(Integer, primary_key=True, index=True)
+    id_guia_costo_servicio = Column(
+        Integer,
+        ForeignKey("guia_costo_servicio.id_guia_costo_servicio", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tipo_stock = Column(String(20), nullable=True)  # "1ra" o "2da"
+    espesor = Column(Numeric(8, 2), nullable=True)
+    ancho = Column(Numeric(8, 2), nullable=True)
+    largo = Column(Numeric(8, 2), nullable=True)
+    piezas = Column(Integer, nullable=True)
+    volumen_m3 = Column(Numeric(12, 4), nullable=True)
+
+    guia_costo = relationship("GuiaCostoServicio", back_populates="stock_planta")
+
+    def to_dict(self):
+        return {
+            "id_stock_planta": self.id_stock_planta,
+            "id_guia_costo_servicio": self.id_guia_costo_servicio,
+            "tipo_stock": self.tipo_stock,
+            "espesor": float(self.espesor) if self.espesor is not None else None,
+            "ancho": float(self.ancho) if self.ancho is not None else None,
+            "largo": float(self.largo) if self.largo is not None else None,
+            "piezas": self.piezas,
+            "volumen_m3": float(self.volumen_m3) if self.volumen_m3 is not None else None,
+        }
+

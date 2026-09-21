@@ -11,6 +11,8 @@ from app.models.guia_costo_servicio import (
     DetalleCostoServicio,
     GuiaCostoProductoTerminado,
     GuiaCostoDetalleProceso,
+    GuiaCostoResumenGeneral,
+    GuiaCostoStockPlanta,
     guia_costo_servicio_os,
     guia_costo_servicio_oc,
 )
@@ -146,6 +148,30 @@ def create_guia_costo_servicio(
                 )
                 proceso_objs.append(dp_obj)
 
+        resumen_objs = []
+        if item.resumen_general:
+            for rg in item.resumen_general:
+                rg_obj = GuiaCostoResumenGeneral(
+                    oc_tabla=rg.oc_tabla,
+                    movimiento=rg.movimiento,
+                    volumen_m3=rg.volumen_m3,
+                    estado=rg.estado,
+                )
+                resumen_objs.append(rg_obj)
+
+        stock_objs = []
+        if item.stock_planta:
+            for sp in item.stock_planta:
+                sp_obj = GuiaCostoStockPlanta(
+                    tipo_stock=sp.tipo_stock,
+                    espesor=sp.espesor,
+                    ancho=sp.ancho,
+                    largo=sp.largo,
+                    piezas=sp.piezas,
+                    volumen_m3=sp.volumen_m3,
+                )
+                stock_objs.append(sp_obj)
+
         final_total_usd = item.total_usd if item.total_usd is not None else calc_total_usd
 
         guia_obj = GuiaCostoServicio(
@@ -156,12 +182,15 @@ def create_guia_costo_servicio(
             destino=item.destino,
             oc_compra_ref=item.oc_compra_ref,
             total_m3=item.total_m3,
+            flejes_2da=item.flejes_2da,
             total_usd=final_total_usd,
             observaciones=item.observaciones,
             url_documento=item.url_documento,
             detalles=detalles_objs,
             productos_terminados=prod_term_objs,
             detalles_proceso=proceso_objs,
+            resumen_general=resumen_objs,
+            stock_planta=stock_objs,
         )
 
         # Link OS

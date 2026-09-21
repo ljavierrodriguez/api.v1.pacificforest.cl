@@ -72,6 +72,44 @@ class GuiaCostoDetalleProcesoRead(GuiaCostoDetalleProcesoBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GuiaCostoResumenGeneralBase(BaseModel):
+    oc_tabla: Optional[str] = None
+    movimiento: Optional[str] = None
+    volumen_m3: Optional[Decimal] = None
+    estado: Optional[str] = None
+
+
+class GuiaCostoResumenGeneralCreate(GuiaCostoResumenGeneralBase):
+    pass
+
+
+class GuiaCostoResumenGeneralRead(GuiaCostoResumenGeneralBase):
+    id_resumen_general: int
+    id_guia_costo_servicio: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GuiaCostoStockPlantaBase(BaseModel):
+    tipo_stock: Optional[str] = None  # "1ra" o "2da"
+    espesor: Optional[Decimal] = None
+    ancho: Optional[Decimal] = None
+    largo: Optional[Decimal] = None
+    piezas: Optional[int] = None
+    volumen_m3: Optional[Decimal] = None
+
+
+class GuiaCostoStockPlantaCreate(GuiaCostoStockPlantaBase):
+    pass
+
+
+class GuiaCostoStockPlantaRead(GuiaCostoStockPlantaBase):
+    id_stock_planta: int
+    id_guia_costo_servicio: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GuiaCostoServicioCreate(BaseModel):
     numero_guia: str = Field(..., max_length=100)
     fecha_despacho: Optional[date] = None
@@ -80,6 +118,7 @@ class GuiaCostoServicioCreate(BaseModel):
     destino: Optional[str] = None
     oc_compra_ref: Optional[str] = None
     total_m3: Optional[Decimal] = None
+    flejes_2da: Optional[Decimal] = None
     total_usd: Optional[Decimal] = None
     observaciones: Optional[str] = None
     url_documento: Optional[str] = None
@@ -88,6 +127,8 @@ class GuiaCostoServicioCreate(BaseModel):
     detalles: Optional[List[DetalleCostoServicioCreate]] = None
     productos_terminados: Optional[List[GuiaCostoProductoTerminadoCreate]] = None
     detalles_proceso: Optional[List[GuiaCostoDetalleProcesoCreate]] = None
+    resumen_general: Optional[List[GuiaCostoResumenGeneralCreate]] = None
+    stock_planta: Optional[List[GuiaCostoStockPlantaCreate]] = None
 
 
 class BatchGuiaCostoServicioCreate(BaseModel):
@@ -104,6 +145,7 @@ class GuiaCostoServicioRead(BaseModel):
     destino: Optional[str] = None
     oc_compra_ref: Optional[str] = None
     total_m3: Optional[float] = None
+    flejes_2da: Optional[float] = None
     total_usd: Optional[float] = None
     observaciones: Optional[str] = None
     url_documento: Optional[str] = None
@@ -112,6 +154,8 @@ class GuiaCostoServicioRead(BaseModel):
     detalles: List[DetalleCostoServicioRead] = []
     productos_terminados: List[GuiaCostoProductoTerminadoRead] = []
     detalles_proceso: List[GuiaCostoDetalleProcesoRead] = []
+    resumen_general: List[GuiaCostoResumenGeneralRead] = []
+    stock_planta: List[GuiaCostoStockPlantaRead] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -122,3 +166,4 @@ class PaginatedGuiaCostoServicioResponse(BaseModel):
     page: int
     page_size: int
     items: List[GuiaCostoServicioRead]
+
