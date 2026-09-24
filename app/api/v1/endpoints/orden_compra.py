@@ -586,10 +586,9 @@ def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
         for c in contactos_list:
             contacto = getattr(c, 'Contacto', None)
             if contacto:
-                if hasattr(contacto, 'to_dict'):
-                    contactos_orden.append(contacto.to_dict())
-                else:
-                    contactos_orden.append(dict(contacto.__dict__))
+                c_data = contacto.to_dict() if hasattr(contacto, 'to_dict') else dict(contacto.__dict__)
+                c_data["id_contacto_orden_compra"] = getattr(c, "id_contacto_orden_compra", None)
+                contactos_orden.append(c_data)
     # Siempre incluir el campo aunque esté vacío
     oc_dict["contactos_orden_compra"] = contactos_orden
 
