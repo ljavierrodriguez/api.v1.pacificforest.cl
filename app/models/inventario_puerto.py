@@ -157,6 +157,37 @@ class InventarioPuerto(Base):
         url_doc = self.url_documento or (g.url_documento if g else None)
         fecha_rec = self.fecha_recepcion or (g.fecha_recepcion if g else None)
 
+        calc_pu = _num(self.precio_unitario)
+        calc_peq = _num(self.precio_eq)
+        calc_sub = _num(self.subtotal)
+
+        if self.oc_compra:
+            import re
+            oc_digits = re.sub(r"\D", "", str(self.oc_compra))
+            if oc_digits:
+                from sqlalchemy.orm import object_session
+                sess = object_session(self)
+                if sess:
+                    from app.models.detalle_orden_compra import DetalleOrdenCompra
+                    id_oc_orig = int(oc_digits)
+                    orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_oc_orig).all()
+                    if orig_dets:
+                        d_match = next((d for d in orig_dets if d.id_producto == self.id_producto), None)
+                        if not d_match and (self.espesor or self.ancho or self.largo):
+                            d_match = next((d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)), None)
+                        if not d_match:
+                            d_match = orig_dets[0]
+                        if d_match:
+                            if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
+                                calc_peq = float(d_match.precio_eq)
+                            elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                                calc_peq = float(d_match.precio_unitario)
+                            if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                                calc_pu = float(d_match.precio_unitario)
+                            vol_val = _num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0
+                            if calc_peq and vol_val:
+                                calc_sub = round(vol_val * calc_peq, 2)
+
         return {
             "id_inventario_puerto": self.id_inventario_puerto,
             "id_guia_inventario_puerto": self.id_guia_inventario_puerto,
@@ -180,11 +211,11 @@ class InventarioPuerto(Base):
             "id_unidad_medida_ancho": self.id_unidad_medida_ancho,
             "largo": self.largo,
             "id_unidad_medida_largo": self.id_unidad_medida_largo,
-            "precio_unitario": _num(self.precio_unitario),
-            "subtotal": _num(self.subtotal),
+            "precio_unitario": calc_pu,
+            "subtotal": calc_sub,
             "volumen": _num(self.volumen),
             "volumen_eq": _num(self.volumen_eq),
-            "precio_eq": _num(self.precio_eq),
+            "precio_eq": calc_peq,
             "piezas": _num(self.piezas),
             "fecha_recepcion": fecha_rec.isoformat() if hasattr(fecha_rec, "isoformat") else fecha_rec,
             "numero_guia": num_guia,
