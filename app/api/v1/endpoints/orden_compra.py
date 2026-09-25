@@ -604,6 +604,40 @@ def get_orden_compra(item_id: int, db: Session = Depends(get_db)):
                 detalles_orden.append(dict(d.__dict__))
     oc_dict["detalles_orden_compra"] = detalles_orden
 
+    # Embebido: órdenes de servicio asociadas
+    from app.models.orden_servicio import OrdenServicio
+    from app.models.guia_costo_servicio import GuiaCostoServicio
+
+    os_query = db.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == item_id).all()
+    guias_cs = db.query(GuiaCostoServicio).filter(GuiaCostoServicio.ordenes_compra.any(id_orden_compra=item_id)).all()
+    os_set = {os.id_orden_servicio: os for os in os_query}
+    for g in guias_cs:
+        for os in g.ordenes_servicio:
+            if os.id_orden_servicio not in os_set:
+                os_set[os.id_orden_servicio] = os
+
+    ordenes_servicio_list = []
+    total_flete_os = 0
+    for os_id, os in os_set.items():
+        fl = float(os.flete or 0)
+        total_flete_os += fl
+        prov_os = getattr(os, "ClienteProveedor", None)
+        est_os = getattr(os, "EstadoOrdenServicio", None)
+        ordenes_servicio_list.append({
+            "id_orden_servicio": os.id_orden_servicio,
+            "servicio": os.servicio,
+            "flete": fl,
+            "valor_neto": float(os.valor_neto or 0),
+            "valor_total": float(os.valor_total or 0),
+            "fecha_emision": os.fecha_emision.isoformat() if os.fecha_emision else None,
+            "fecha_entrega": os.fecha_entrega.isoformat() if os.fecha_entrega else None,
+            "proveedor_nombre": getattr(prov_os, "razon_social", None),
+            "estado_nombre": getattr(est_os, "nombre", None),
+        })
+
+    oc_dict["ordenes_servicio"] = ordenes_servicio_list
+    oc_dict["total_flete"] = round(total_flete_os, 2)
+
     return oc_dict
 
 

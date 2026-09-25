@@ -117,6 +117,8 @@ class OrdenCompraRead(BaseModel):
     id_operacion_exportacion: Optional[int] = Field(None, description="ID de la operación de exportación asociada a la proforma")
     contactos_orden_compra: Optional[List[Any]] = Field(None, description="Contactos asociados a la orden de compra")
     detalles_orden_compra: Optional[List[Any]] = Field(None, description="Detalles/productos asociados a la orden de compra")
+    ordenes_servicio: Optional[List[Any]] = Field(None, description="Órdenes de servicio asociadas")
+    total_flete: Optional[Decimal] = Field(None, description="Total flete de órdenes de servicio asociadas")
 
     model_config = ConfigDict(from_attributes=True)
 
