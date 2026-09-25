@@ -181,90 +181,124 @@ def get_resumen_inventario_transitorio(
     id_bodega: Optional[int] = Query(None, description="Filtrar por ID de bodega"),
     db: Session = Depends(get_db),
 ):
-    from app.models.bodega import Bodega
-    from app.models.producto import Producto
+    from app.models.orden_servicio import OrdenServicio
+    from app.models.guia_costo_servicio import GuiaCostoServicio
 
-    totals_query = db.query(
-        func.coalesce(func.sum(InventarioTransitorio.volumen), 0).label("volumen"),
-        func.coalesce(func.sum(InventarioTransitorio.volumen_eq), 0).label("volumen_eq"),
-        func.coalesce(func.sum(InventarioTransitorio.subtotal), 0).label("costo"),
-        func.count(InventarioTransitorio.id_inventario_transitorio).label("items_count"),
-        func.coalesce(func.sum(InventarioTransitorio.numero_paquetes), 0).label("paquetes_count"),
-        func.coalesce(func.sum(InventarioTransitorio.piezas), 0).label("piezas_count")
-    )
+    q = db.query(InventarioTransitorio)
     if id_bodega:
-        totals_query = totals_query.filter(InventarioTransitorio.id_bodega == id_bodega)
-    t = totals_query.first()
+        q = q.filter(InventarioTransitorio.id_bodega == id_bodega)
+    items = q.all()
 
-    q_bodega = (
-        db.query(
-            InventarioTransitorio.id_bodega,
-            func.coalesce(Bodega.nombre, "Sin Bodega").label("bodega_nombre"),
-            func.coalesce(func.sum(InventarioTransitorio.volumen), 0).label("volumen"),
-            func.coalesce(func.sum(InventarioTransitorio.volumen_eq), 0).label("volumen_eq"),
-            func.coalesce(func.sum(InventarioTransitorio.subtotal), 0).label("costo"),
-            func.count(InventarioTransitorio.id_inventario_transitorio).label("items_count"),
-            func.coalesce(func.sum(InventarioTransitorio.numero_paquetes), 0).label("paquetes_count"),
-        )
-        .outerjoin(Bodega, InventarioTransitorio.id_bodega == Bodega.id_bodega)
-    )
-    if id_bodega:
-        q_bodega = q_bodega.filter(InventarioTransitorio.id_bodega == id_bodega)
-    desglose_bodegas = (
-        q_bodega.group_by(InventarioTransitorio.id_bodega, Bodega.nombre)
-        .order_by(desc("costo"))
-        .all()
-    )
+    item_dicts = [t.to_dict() for t in items]
+    total_volumen = round(sum(d.get("volumen") or 0 for d in item_dicts), 3)
+    total_volumen_eq = round(sum(d.get("volumen_eq") or 0 for d in item_dicts), 3)
+    total_costo_producto = round(sum(d.get("subtotal") or 0 for d in item_dicts), 2)
+    total_items = len(item_dicts)
+    total_paquetes = sum(d.get("numero_paquetes") or 1 for d in item_dicts)
+    total_piezas = round(sum(d.get("piezas") or 0 for d in item_dicts), 2)
 
-    q_producto = (
-        db.query(
-            InventarioTransitorio.id_producto,
-            func.coalesce(Producto.nombre_producto_esp, Producto.nombre_producto_ing, InventarioTransitorio.texto_abierto, "Sin Producto").label("producto_nombre"),
-            func.coalesce(func.sum(InventarioTransitorio.volumen), 0).label("volumen"),
-            func.coalesce(func.sum(InventarioTransitorio.volumen_eq), 0).label("volumen_eq"),
-            func.coalesce(func.sum(InventarioTransitorio.subtotal), 0).label("costo"),
-            func.count(InventarioTransitorio.id_inventario_transitorio).label("items_count"),
-        )
-        .outerjoin(Producto, InventarioTransitorio.id_producto == Producto.id_producto)
-    )
-    if id_bodega:
-        q_producto = q_producto.filter(InventarioTransitorio.id_bodega == id_bodega)
-    desglose_productos = (
-        q_producto.group_by(InventarioTransitorio.id_producto, Producto.nombre_producto_esp, Producto.nombre_producto_ing, InventarioTransitorio.texto_abierto)
-        .order_by(desc("costo"))
-        .all()
-    )
+    # Calculate linked fletes
+    os_ids = set()
+    for t in items:
+        if t.id_orden_compra:
+            linked_os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == t.id_orden_compra).all()
+            for los in linked_os:
+                os_ids.add(los.id_orden_servicio)
+
+    guias_numeros = {t.numero_guia for t in items if t.numero_guia}
+    for gnum in guias_numeros:
+        gcs = db.query(GuiaCostoServicio).filter(GuiaCostoServicio.numero_guia == gnum).first()
+        if gcs:
+            for los in gcs.ordenes_servicio:
+                os_ids.add(los.id_orden_servicio)
+
+    total_flete = 0
+    for os_id in os_ids:
+        os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_servicio == os_id).first()
+        if os and os.flete:
+            total_flete += float(os.flete)
+    total_flete = round(total_flete, 2)
+    total_costo = round(total_costo_producto + total_flete, 2)
+
+    # Breakdown by bodega
+    bodega_groups = {}
+    for d in item_dicts:
+        bid = d.get("id_bodega")
+        bname = d.get("bodega_nombre") or "Sin Bodega"
+        if bid not in bodega_groups:
+            bodega_groups[bid] = {
+                "id_bodega": bid,
+                "nombre": bname,
+                "volumen": 0,
+                "volumen_eq": 0,
+                "costo_producto": 0,
+                "costo_flete": 0,
+                "costo": 0,
+                "items_count": 0,
+                "paquetes_count": 0
+            }
+        bodega_groups[bid]["volumen"] += d.get("volumen") or 0
+        bodega_groups[bid]["volumen_eq"] += d.get("volumen_eq") or 0
+        bodega_groups[bid]["costo_producto"] += d.get("subtotal") or 0
+        bodega_groups[bid]["items_count"] += 1
+        bodega_groups[bid]["paquetes_count"] += d.get("numero_paquetes") or 1
+
+    desglose_bodegas = []
+    for bid, bg in bodega_groups.items():
+        bg["volumen"] = round(bg["volumen"], 3)
+        bg["volumen_eq"] = round(bg["volumen_eq"], 3)
+        bg["costo_producto"] = round(bg["costo_producto"], 2)
+        b_flete = round((bg["volumen"] / (total_volumen or 1)) * total_flete, 2) if total_volumen > 0 else 0
+        bg["costo_flete"] = b_flete
+        bg["costo"] = round(bg["costo_producto"] + b_flete, 2)
+        desglose_bodegas.append(bg)
+
+    desglose_bodegas.sort(key=lambda x: x["costo"], reverse=True)
+
+    # Breakdown by producto
+    prod_groups = {}
+    for d in item_dicts:
+        pid = d.get("id_producto")
+        pname = d.get("producto_nombre") or d.get("texto_abierto") or "Sin Producto"
+        if pid not in prod_groups:
+            prod_groups[pid] = {
+                "id_producto": pid,
+                "nombre": pname,
+                "volumen": 0,
+                "volumen_eq": 0,
+                "costo_producto": 0,
+                "costo_flete": 0,
+                "costo": 0,
+                "items_count": 0
+            }
+        prod_groups[pid]["volumen"] += d.get("volumen") or 0
+        prod_groups[pid]["volumen_eq"] += d.get("volumen_eq") or 0
+        prod_groups[pid]["costo_producto"] += d.get("subtotal") or 0
+        prod_groups[pid]["items_count"] += 1
+
+    desglose_productos = []
+    for pid, pg in prod_groups.items():
+        pg["volumen"] = round(pg["volumen"], 3)
+        pg["volumen_eq"] = round(pg["volumen_eq"], 3)
+        pg["costo_producto"] = round(pg["costo_producto"], 2)
+        p_flete = round((pg["volumen"] / (total_volumen or 1)) * total_flete, 2) if total_volumen > 0 else 0
+        pg["costo_flete"] = p_flete
+        pg["costo"] = round(pg["costo_producto"] + p_flete, 2)
+        desglose_productos.append(pg)
+
+    desglose_productos.sort(key=lambda x: x["costo"], reverse=True)
 
     return {
-        "total_volumen": round(float(t.volumen or 0), 3),
-        "total_volumen_eq": round(float(t.volumen_eq or 0), 3),
-        "total_costo": round(float(t.costo or 0), 2),
-        "total_items": int(t.items_count or 0),
-        "total_paquetes": int(t.paquetes_count or 0),
-        "total_piezas": round(float(t.piezas_count or 0), 2),
-        "desglose_bodegas": [
-            {
-                "id_bodega": b.id_bodega,
-                "nombre": b.bodega_nombre,
-                "volumen": round(float(b.volumen or 0), 3),
-                "volumen_eq": round(float(b.volumen_eq or 0), 3),
-                "costo": round(float(b.costo or 0), 2),
-                "items_count": int(b.items_count or 0),
-                "paquetes_count": int(b.paquetes_count or 0),
-            }
-            for b in desglose_bodegas
-        ],
-        "desglose_productos": [
-            {
-                "id_producto": p.id_producto,
-                "nombre": p.producto_nombre,
-                "volumen": round(float(p.volumen or 0), 3),
-                "volumen_eq": round(float(p.volumen_eq or 0), 3),
-                "costo": round(float(p.costo or 0), 2),
-                "items_count": int(p.items_count or 0),
-            }
-            for p in desglose_productos
-        ],
+        "total_volumen": total_volumen,
+        "total_volumen_eq": total_volumen_eq,
+        "total_costo_producto": total_costo_producto,
+        "total_flete": total_flete,
+        "total_costo": total_costo,
+        "total_items": total_items,
+        "total_paquetes": total_paquetes,
+        "total_piezas": total_piezas,
+        "desglose_bodegas": desglose_bodegas,
+        "desglose_productos": desglose_productos,
     }
 
 
