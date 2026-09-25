@@ -163,7 +163,8 @@ class InventarioPuerto(Base):
 
         if self.oc_compra:
             import re
-            oc_digits = re.sub(r"\D", "", str(self.oc_compra))
+            oc_raw = str(self.oc_compra)
+            oc_digits = re.sub(r"\D", "", oc_raw)
             if oc_digits:
                 from sqlalchemy.orm import object_session
                 sess = object_session(self)
@@ -172,11 +173,23 @@ class InventarioPuerto(Base):
                     id_oc_orig = int(oc_digits)
                     orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_oc_orig).all()
                     if orig_dets:
-                        d_match = next((d for d in orig_dets if d.id_producto == self.id_producto), None)
-                        if not d_match and (self.espesor or self.ancho or self.largo):
-                            d_match = next((d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)), None)
-                        if not d_match:
-                            d_match = orig_dets[0]
+                        prod_dets = [d for d in orig_dets if d.id_producto == self.id_producto]
+                        if not prod_dets and (self.espesor or self.ancho or self.largo):
+                            prod_dets = [d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)]
+                        if not prod_dets:
+                            prod_dets = orig_dets
+
+                        # Check for SD (highest price) or BS (lowest price)
+                        is_sd = bool(re.search(r"\bSD\b", oc_raw, re.IGNORECASE) or "SD" in oc_raw.upper())
+                        is_bs = bool(re.search(r"\bBS\b", oc_raw, re.IGNORECASE) or "BS" in oc_raw.upper())
+
+                        if is_sd and prod_dets:
+                            d_match = max(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                        elif is_bs and prod_dets:
+                            d_match = min(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                        else:
+                            d_match = prod_dets[0] if prod_dets else orig_dets[0]
+
                         if d_match:
                             if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
                                 calc_peq = float(d_match.precio_eq)
