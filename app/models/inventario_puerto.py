@@ -161,50 +161,136 @@ class InventarioPuerto(Base):
         calc_peq = _num(self.precio_eq)
         calc_sub = _num(self.subtotal)
 
+        from sqlalchemy.orm import object_session
+        sess = object_session(self)
+
+        # 1. Costo Compra Base ($/m3) from origin OC (with SD/BS resolution)
+        costo_compra_m3 = calc_peq or calc_pu or 0.0
+        oc_raw = str(self.oc_compra or "")
+        oc_digits = ""
         if self.oc_compra:
             import re
-            oc_raw = str(self.oc_compra)
             oc_digits = re.sub(r"\D", "", oc_raw)
-            if oc_digits:
-                from sqlalchemy.orm import object_session
-                sess = object_session(self)
-                if sess:
-                    from app.models.detalle_orden_compra import DetalleOrdenCompra
-                    id_oc_orig = int(oc_digits)
-                    orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_oc_orig).all()
-                    if orig_dets:
-                        prod_dets = [d for d in orig_dets if d.id_producto == self.id_producto]
-                        if not prod_dets and (self.espesor or self.ancho or self.largo):
-                            prod_dets = [d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)]
-                        if not prod_dets:
-                            prod_dets = orig_dets
+            if oc_digits and sess:
+                from app.models.detalle_orden_compra import DetalleOrdenCompra
+                id_oc_orig = int(oc_digits)
+                orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_oc_orig).all()
+                if orig_dets:
+                    prod_dets = [d for d in orig_dets if d.id_producto == self.id_producto]
+                    if not prod_dets and (self.espesor or self.ancho or self.largo):
+                        prod_dets = [d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)]
+                    if not prod_dets:
+                        prod_dets = orig_dets
 
-                        # Check for SD (highest price) or BS (lowest price)
-                        is_sd = bool(re.search(r"\bSD\b", oc_raw, re.IGNORECASE) or "SD" in oc_raw.upper())
-                        is_bs = bool(re.search(r"\bBS\b", oc_raw, re.IGNORECASE) or "BS" in oc_raw.upper())
+                    # Check for SD (highest price) or BS (lowest price)
+                    is_sd = bool(re.search(r"\bSD\b", oc_raw, re.IGNORECASE) or "SD" in oc_raw.upper())
+                    is_bs = bool(re.search(r"\bBS\b", oc_raw, re.IGNORECASE) or "BS" in oc_raw.upper())
 
-                        if is_sd and prod_dets:
-                            d_match = max(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                        elif is_bs and prod_dets:
-                            d_match = min(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                        else:
-                            d_match = prod_dets[0] if prod_dets else orig_dets[0]
+                    if is_sd and prod_dets:
+                        d_match = max(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                    elif is_bs and prod_dets:
+                        d_match = min(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                    else:
+                        d_match = prod_dets[0] if prod_dets else orig_dets[0]
 
-                        if d_match:
-                            if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
-                                calc_peq = float(d_match.precio_eq)
-                            elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
-                                calc_peq = float(d_match.precio_unitario)
-                            if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
-                                calc_pu = float(d_match.precio_unitario)
-                            vol_val = _num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0
-                            if calc_peq and vol_val:
-                                calc_sub = round(vol_val * calc_peq, 2)
+                    if d_match:
+                        if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
+                            calc_peq = float(d_match.precio_eq)
+                        elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                            calc_peq = float(d_match.precio_unitario)
+                        if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                            calc_pu = float(d_match.precio_unitario)
+                        costo_compra_m3 = calc_peq or calc_pu or 0.0
+
+        # 2. Guia Costo Servicio (volumen entrada / volumen salida y servicios)
+        vol_in = 1.0
+        vol_out = 1.0
+        gcs = None
+        servicios_m3 = 0.0
+        total_vol_gcs = 0.0
+
+        if num_guia and sess:
+            from app.models.guia_costo_servicio import GuiaCostoServicio
+            gcs = sess.query(GuiaCostoServicio).filter(GuiaCostoServicio.numero_guia == str(num_guia).strip()).first()
+
+        if gcs:
+            total_vol_gcs = float(gcs.total_m3) if gcs.total_m3 else 0.0
+            if not total_vol_gcs and gcs.detalles_proceso:
+                total_vol_gcs = sum(float(dp.volumen_m3_salida or 0) for dp in gcs.detalles_proceso)
+            if not total_vol_gcs and g and g.detalles:
+                total_vol_gcs = sum(float(it.volumen_eq or it.volumen or 0) for it in g.detalles)
+
+            total_servicios_usd = float(gcs.total_usd or 0)
+            if not total_servicios_usd and gcs.detalles:
+                total_servicios_usd = sum(float(d.total_usd or 0) for d in gcs.detalles)
+
+            servicios_m3 = round(total_servicios_usd / total_vol_gcs, 2) if total_vol_gcs > 0 else 0.0
+
+            # Match proceso in GCS
+            matched_dp = None
+            if gcs.detalles_proceso:
+                for dp in gcs.detalles_proceso:
+                    dp_oc = str(dp.oc_compra_entrada or "")
+                    if oc_digits and oc_digits in dp_oc:
+                        is_sd = "SD" in oc_raw.upper()
+                        is_bs = "BS" in oc_raw.upper()
+                        dp_sd = "SD" in dp_oc.upper()
+                        dp_bs = "BS" in dp_oc.upper()
+                        if (is_sd and dp_sd) or (is_bs and dp_bs) or (not is_sd and not is_bs and not dp_sd and not dp_bs):
+                            matched_dp = dp
+                            break
+                        elif not matched_dp:
+                            matched_dp = dp
+                if not matched_dp and len(gcs.detalles_proceso) == 1:
+                    matched_dp = gcs.detalles_proceso[0]
+
+            if matched_dp and matched_dp.volumen_m3_entrada and matched_dp.volumen_m3_salida:
+                vol_in = float(matched_dp.volumen_m3_entrada)
+                vol_out = float(matched_dp.volumen_m3_salida)
+
+        # 3. Costo Madera Ajustado ($/m3): ((volumen entrada * costo compra) / volumen salida)
+        costo_madera_m3 = round((vol_in * costo_compra_m3) / vol_out, 2) if (vol_out and vol_out > 0) else round(costo_compra_m3, 2)
+
+        # 4. Orden de Servicio (Flete $/m3)
+        # ya que puede o no tener orden de servicio
+        os_obj = os
+        if not os_obj and g and g.id_orden_servicio and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_obj = sess.get(OrdenServicio, g.id_orden_servicio)
+        if not os_obj and gcs and gcs.ordenes_servicio:
+            os_obj = gcs.ordenes_servicio[0]
+        if not os_obj and self.id_orden_compra and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_obj = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == self.id_orden_compra).first()
+        if not os_obj and g and g.id_orden_compra and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_obj = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == g.id_orden_compra).first()
+
+        flete_m3 = 0.0
+        tiene_os = False
+        id_os_linked = self.id_orden_servicio
+        if os_obj:
+            tiene_os = True
+            id_os_linked = os_obj.id_orden_servicio
+            if os_obj.flete:
+                flete_total = float(os_obj.flete)
+                divisor_vol = total_vol_gcs if total_vol_gcs > 0 else (_num(self.volumen_eq) or _num(self.volumen) or 1.0)
+                flete_m3 = round(flete_total / divisor_vol, 2)
+
+        # 5. Costo Final (Unitario y Totales)
+        # Formula: ((cantidad volumen entrada x costo compra) / volumen salida) + servicios + flete
+        costo_final_unitario = round(costo_madera_m3 + servicios_m3 + flete_m3, 2)
+        vol_item = _num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0.0
+        costo_final_total = round(vol_item * costo_final_unitario, 2)
+        costo_madera_total = round(vol_item * costo_madera_m3, 2)
+        costo_servicios_total = round(vol_item * servicios_m3, 2)
+        costo_flete_total = round(vol_item * flete_m3, 2)
+        calc_sub = costo_madera_total
 
         return {
             "id_inventario_puerto": self.id_inventario_puerto,
             "id_guia_inventario_puerto": self.id_guia_inventario_puerto,
-            "id_orden_servicio": self.id_orden_servicio,
+            "id_orden_servicio": id_os_linked,
             "id_detalle_os": self.id_detalle_os,
             "id_orden_compra": self.id_orden_compra,
             "id_detalle_odc": self.id_detalle_odc,
@@ -240,4 +326,16 @@ class InventarioPuerto(Base):
             "url_documento": url_doc,
             "observaciones": self.observaciones,
             "estado": self.estado,
+            "costo_compra_m3": round(costo_compra_m3, 2),
+            "volumen_entrada_proceso": round(vol_in, 4) if vol_in != 1.0 else None,
+            "volumen_salida_proceso": round(vol_out, 4) if vol_out != 1.0 else None,
+            "costo_madera_m3": costo_madera_m3,
+            "servicios_m3": servicios_m3,
+            "flete_m3": flete_m3,
+            "costo_final_unitario": costo_final_unitario,
+            "costo_final_total": costo_final_total,
+            "costo_madera_total": costo_madera_total,
+            "costo_servicios_total": costo_servicios_total,
+            "costo_flete_total": costo_flete_total,
+            "tiene_orden_servicio": tiene_os,
         }

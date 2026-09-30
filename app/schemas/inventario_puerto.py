@@ -134,6 +134,19 @@ class InventarioPuertoRead(InventarioPuertoBase):
     unidad_venta_nombre: Optional[str] = None
     proveedor_nombre: Optional[str] = None
 
+    costo_compra_m3: Optional[float] = None
+    volumen_entrada_proceso: Optional[float] = None
+    volumen_salida_proceso: Optional[float] = None
+    costo_madera_m3: Optional[float] = None
+    servicios_m3: Optional[float] = None
+    flete_m3: Optional[float] = None
+    costo_final_unitario: Optional[float] = None
+    costo_final_total: Optional[float] = None
+    costo_madera_total: Optional[float] = None
+    costo_servicios_total: Optional[float] = None
+    costo_flete_total: Optional[float] = None
+    tiene_orden_servicio: Optional[bool] = False
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -154,9 +167,18 @@ class GuiaInventarioPuertoRead(BaseModel):
     total_volumen: Optional[float] = 0.0
     total_piezas: Optional[float] = 0.0
     total_paquetes: Optional[int] = 0
+    total_costo_madera: Optional[float] = 0.0
+    total_servicios: Optional[float] = 0.0
+    total_flete: Optional[float] = 0.0
+    total_costo_final: Optional[float] = 0.0
+    costo_final_promedio_m3: Optional[float] = 0.0
+    servicios_m3: Optional[float] = 0.0
+    flete_m3: Optional[float] = 0.0
+    tiene_orden_servicio: Optional[bool] = False
     detalles: List[InventarioPuertoRead] = []
 
     model_config = ConfigDict(from_attributes=True)
+
 
 
 class PaginatedGuiaInventarioPuertoResponse(BaseModel):
