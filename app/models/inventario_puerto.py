@@ -251,34 +251,43 @@ class InventarioPuerto(Base):
 
             servicios_m3 = round(total_servicios_usd / total_vol_salida_gcs, 2) if total_vol_salida_gcs > 0 else 0.0
 
-            # Buscar coincidencia por OC en resumen_general (Entrada rustico vs Flejes 1ra/Terminado + Flejes 2da)
-            matched_rg_in = 0.0
-            matched_rg_1ra = 0.0
-            matched_rg_2da = 0.0
-            found_rg_match = False
+            # Construir bloques de resumen general por entrada/salida (Entrada rustico vs Flejes 1ra + Flejes 2da)
+            rg_blocks = []
+            curr_b = None
+            if gcs.resumen_general:
+                for rg in gcs.resumen_general:
+                    mov = str(rg.movimiento or "").upper()
+                    v = float(rg.volumen_m3 or 0)
+                    if "ENTRADA" in mov or "RUSTICO" in mov or curr_b is None:
+                        curr_b = {
+                            "oc": str(rg.oc_tabla or ""),
+                            "in": v if ("ENTRADA" in mov or "RUSTICO" in mov) else 0.0,
+                            "1ra": 0.0,
+                            "2da": 0.0,
+                        }
+                        rg_blocks.append(curr_b)
+                    else:
+                        if any(k in mov for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"]):
+                            curr_b["2da"] += v
+                        elif any(k in mov for k in ["TERMINADO", "1RA", "1ERA", "1°", "FLEJES"]):
+                            curr_b["1ra"] += v
 
-            if gcs.resumen_general and oc_digits:
+            matched_b = None
+            if rg_blocks and oc_digits:
                 is_sd = "SD" in oc_raw.upper()
                 is_bs = "BS" in oc_raw.upper()
-                for rg in gcs.resumen_general:
-                    rg_oc = str(rg.oc_tabla or "")
-                    if oc_digits in rg_oc:
-                        rg_sd = "SD" in rg_oc.upper()
-                        rg_bs = "BS" in rg_oc.upper()
-                        if (is_sd and rg_sd) or (is_bs and rg_bs) or (not is_sd and not is_bs and not rg_sd and not rg_bs) or (not rg_sd and not rg_bs):
-                            found_rg_match = True
-                            mov = str(rg.movimiento or "").upper()
-                            v = float(rg.volumen_m3 or 0)
-                            if "ENTRADA" in mov or "RUSTICO" in mov:
-                                matched_rg_in += v
-                            elif any(k in mov for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"]):
-                                matched_rg_2da += v
-                            elif any(k in mov for k in ["TERMINADO", "1RA", "1ERA", "1°", "FLEJES TERMINADO", "FLEJES 1RA", "FLEJES 1ERA", "FLEJES"]):
-                                matched_rg_1ra += v
+                for b in rg_blocks:
+                    b_oc = b["oc"]
+                    if oc_digits in b_oc:
+                        b_sd = "SD" in b_oc.upper()
+                        b_bs = "BS" in b_oc.upper()
+                        if (is_sd and b_sd) or (is_bs and b_bs) or (not is_sd and not is_bs and not b_sd and not b_bs) or (not b_sd and not b_bs):
+                            matched_b = b
+                            break
 
-            if found_rg_match and (matched_rg_in > 0 or (matched_rg_1ra + matched_rg_2da) > 0):
-                vol_in = matched_rg_in if matched_rg_in > 0 else 1.0
-                vol_out = (matched_rg_1ra + matched_rg_2da) if (matched_rg_1ra + matched_rg_2da) > 0 else 1.0
+            if matched_b and (matched_b["1ra"] + matched_b["2da"]) > 0:
+                vol_in = matched_b["in"] if matched_b["in"] > 0 else 1.0
+                vol_out = matched_b["1ra"] + matched_b["2da"]
             else:
                 # Match en detalles_proceso de GCS
                 matched_dp = None
@@ -300,11 +309,9 @@ class InventarioPuerto(Base):
 
                 if matched_dp and matched_dp.volumen_m3_entrada:
                     vol_in = float(matched_dp.volumen_m3_entrada)
-                    # Si hay volumen de salida global (1ra + 2da) y un solo proceso o resumen proporcional
                     if len(gcs.detalles_proceso) == 1 and total_vol_salida_gcs > 0:
                         vol_out = total_vol_salida_gcs
                     elif matched_dp.volumen_m3_salida:
-                        # Si hay 2da en la guia, ajustar salida proporcionalmente
                         dp_out_raw = float(matched_dp.volumen_m3_salida)
                         sum_dp_out = sum(float(dp.volumen_m3_salida or 0) for dp in gcs.detalles_proceso)
                         if sum_dp_out > 0 and total_vol_salida_gcs > 0:
@@ -313,6 +320,10 @@ class InventarioPuerto(Base):
                             vol_out = dp_out_raw
                 elif total_vol_salida_gcs > 0:
                     vol_out = total_vol_salida_gcs
+
+            # Safety fallback: si por alguna razón vol_out quedó en <= 0 o con un ratio irreal
+            if (vol_out <= 0 or (vol_in / vol_out > 5.0)) and total_vol_salida_gcs > 0:
+                vol_out = total_vol_salida_gcs
 
         # 3. Costo Madera Ajustado ($/m3): ((volumen entrada * costo compra) / volumen salida)
         costo_madera_m3 = round((vol_in * costo_compra_m3) / vol_out, 2) if (vol_out and vol_out > 0) else round(costo_compra_m3, 2)
