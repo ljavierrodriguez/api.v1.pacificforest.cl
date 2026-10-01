@@ -221,22 +221,22 @@ class InventarioPuerto(Base):
 
             # Fallback a stock_planta si total_m3 o flejes_2da están vacíos
             if vol_1ra_tot <= 0 and gcs.stock_planta:
-                vol_1ra_tot = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock == "1ra")
+                vol_1ra_tot = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock and any(k in sp.tipo_stock.upper() for k in ["1RA", "1ERA", "1°", "1", "TERMINADO"]))
             if vol_2da_tot <= 0 and gcs.stock_planta:
-                vol_2da_tot = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock == "2da")
+                vol_2da_tot = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock and any(k in sp.tipo_stock.upper() for k in ["2DA", "2ERA", "2°", "2"]))
 
             # Fallback a resumen_general
             if vol_1ra_tot <= 0 and gcs.resumen_general:
                 vol_1ra_tot = sum(
                     float(rg.volumen_m3 or 0)
                     for rg in gcs.resumen_general
-                    if rg.movimiento and ("TERMINADO" in rg.movimiento.upper() or "1RA" in rg.movimiento.upper() or ("FLEJES" in rg.movimiento.upper() and "2DA" not in rg.movimiento.upper()))
+                    if rg.movimiento and any(k in rg.movimiento.upper() for k in ["TERMINADO", "1RA", "1ERA", "1°", "FLEJES TERMINADO", "FLEJES 1RA", "FLEJES 1ERA"]) and "2DA" not in (rg.movimiento or "").upper()
                 )
             if vol_2da_tot <= 0 and gcs.resumen_general:
                 vol_2da_tot = sum(
                     float(rg.volumen_m3 or 0)
                     for rg in gcs.resumen_general
-                    if rg.movimiento and ("2DA" in rg.movimiento.upper())
+                    if rg.movimiento and any(k in rg.movimiento.upper() for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"])
                 )
 
             total_vol_salida_gcs = vol_1ra_tot + vol_2da_tot
@@ -251,7 +251,7 @@ class InventarioPuerto(Base):
 
             servicios_m3 = round(total_servicios_usd / total_vol_salida_gcs, 2) if total_vol_salida_gcs > 0 else 0.0
 
-            # Buscar coincidencia por OC en resumen_general (Entrada rustico vs Flejes 1ra + Flejes 2da)
+            # Buscar coincidencia por OC en resumen_general (Entrada rustico vs Flejes 1ra/Terminado + Flejes 2da)
             matched_rg_in = 0.0
             matched_rg_1ra = 0.0
             matched_rg_2da = 0.0
@@ -271,9 +271,9 @@ class InventarioPuerto(Base):
                             v = float(rg.volumen_m3 or 0)
                             if "ENTRADA" in mov or "RUSTICO" in mov:
                                 matched_rg_in += v
-                            elif "2DA" in mov:
+                            elif any(k in mov for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"]):
                                 matched_rg_2da += v
-                            elif "TERMINADO" in mov or "1RA" in mov or "FLEJES" in mov:
+                            elif any(k in mov for k in ["TERMINADO", "1RA", "1ERA", "1°", "FLEJES TERMINADO", "FLEJES 1RA", "FLEJES 1ERA", "FLEJES"]):
                                 matched_rg_1ra += v
 
             if found_rg_match and (matched_rg_in > 0 or (matched_rg_1ra + matched_rg_2da) > 0):
