@@ -24,6 +24,7 @@ def get_resumen_general_inventario(
     gran_total_volumen = round(resumen_trans["total_volumen"] + resumen_puerto["total_volumen"], 3)
     gran_total_volumen_eq = round(resumen_trans["total_volumen_eq"] + resumen_puerto["total_volumen_eq"], 3)
     gran_total_costo_producto = round(resumen_trans.get("total_costo_producto", resumen_trans["total_costo"]) + resumen_puerto.get("total_costo_producto", resumen_puerto["total_costo"]), 2)
+    gran_total_costo_servicio = round(resumen_trans.get("total_costo_servicio", 0) + resumen_puerto.get("total_costo_servicio", 0), 2)
     gran_total_flete = round(resumen_trans.get("total_flete", 0) + resumen_puerto.get("total_flete", 0), 2)
     gran_total_costo = round(resumen_trans["total_costo"] + resumen_puerto["total_costo"], 2)
     gran_total_items = resumen_trans["total_items"] + resumen_puerto["total_items"]
@@ -34,6 +35,7 @@ def get_resumen_general_inventario(
             "total_volumen": gran_total_volumen,
             "total_volumen_eq": gran_total_volumen_eq,
             "total_costo_producto": gran_total_costo_producto,
+            "total_costo_servicio": gran_total_costo_servicio,
             "total_flete": gran_total_flete,
             "total_costo": gran_total_costo,
             "total_items": gran_total_items,

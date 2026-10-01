@@ -204,35 +204,13 @@ def get_resumen_inventario_puerto(
     item_dicts = [p.to_dict() for p in items]
     total_volumen = round(sum(d.get("volumen") or 0 for d in item_dicts), 3)
     total_volumen_eq = round(sum(d.get("volumen_eq") or 0 for d in item_dicts), 3)
-    total_costo_producto = round(sum(d.get("subtotal") or 0 for d in item_dicts), 2)
+    total_costo_producto = round(sum(d.get("costo_madera_total") if d.get("costo_madera_total") is not None else (d.get("subtotal") or 0) for d in item_dicts), 2)
+    total_costo_servicio = round(sum(d.get("costo_servicios_total") or 0 for d in item_dicts), 2)
+    total_flete = round(sum(d.get("costo_flete_total") or 0 for d in item_dicts), 2)
+    total_costo = round(sum(d.get("costo_final_total") if d.get("costo_final_total") is not None else ((d.get("subtotal") or 0) + (d.get("costo_servicios_total") or 0) + (d.get("costo_flete_total") or 0)) for d in item_dicts), 2)
     total_items = len(item_dicts)
     total_paquetes = sum(d.get("numero_paquetes") or 1 for d in item_dicts)
     total_piezas = round(sum(d.get("piezas") or 0 for d in item_dicts), 2)
-
-    # Calculate linked fletes
-    os_ids = set()
-    for p in items:
-        if p.id_orden_servicio:
-            os_ids.add(p.id_orden_servicio)
-        if p.id_orden_compra:
-            linked_os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == p.id_orden_compra).all()
-            for los in linked_os:
-                os_ids.add(los.id_orden_servicio)
-
-    guias_numeros = {p.numero_guia for p in items if p.numero_guia}
-    for gnum in guias_numeros:
-        gcs = db.query(GuiaCostoServicio).filter(GuiaCostoServicio.numero_guia == gnum).first()
-        if gcs:
-            for los in gcs.ordenes_servicio:
-                os_ids.add(los.id_orden_servicio)
-
-    total_flete = 0
-    for os_id in os_ids:
-        os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_servicio == os_id).first()
-        if os and os.flete:
-            total_flete += float(os.flete)
-    total_flete = round(total_flete, 2)
-    total_costo = round(total_costo_producto + total_flete, 2)
 
     # Breakdown by bodega
     bodega_groups = {}
@@ -246,6 +224,7 @@ def get_resumen_inventario_puerto(
                 "volumen": 0,
                 "volumen_eq": 0,
                 "costo_producto": 0,
+                "costo_servicio": 0,
                 "costo_flete": 0,
                 "costo": 0,
                 "items_count": 0,
@@ -253,7 +232,10 @@ def get_resumen_inventario_puerto(
             }
         bodega_groups[bid]["volumen"] += d.get("volumen") or 0
         bodega_groups[bid]["volumen_eq"] += d.get("volumen_eq") or 0
-        bodega_groups[bid]["costo_producto"] += d.get("subtotal") or 0
+        bodega_groups[bid]["costo_producto"] += d.get("costo_madera_total") if d.get("costo_madera_total") is not None else (d.get("subtotal") or 0)
+        bodega_groups[bid]["costo_servicio"] += d.get("costo_servicios_total") or 0
+        bodega_groups[bid]["costo_flete"] += d.get("costo_flete_total") or 0
+        bodega_groups[bid]["costo"] += d.get("costo_final_total") if d.get("costo_final_total") is not None else ((d.get("subtotal") or 0) + (d.get("costo_servicios_total") or 0) + (d.get("costo_flete_total") or 0))
         bodega_groups[bid]["items_count"] += 1
         bodega_groups[bid]["paquetes_count"] += d.get("numero_paquetes") or 1
 
@@ -262,9 +244,9 @@ def get_resumen_inventario_puerto(
         bg["volumen"] = round(bg["volumen"], 3)
         bg["volumen_eq"] = round(bg["volumen_eq"], 3)
         bg["costo_producto"] = round(bg["costo_producto"], 2)
-        b_flete = round((bg["volumen"] / (total_volumen or 1)) * total_flete, 2) if total_volumen > 0 else 0
-        bg["costo_flete"] = b_flete
-        bg["costo"] = round(bg["costo_producto"] + b_flete, 2)
+        bg["costo_servicio"] = round(bg["costo_servicio"], 2)
+        bg["costo_flete"] = round(bg["costo_flete"], 2)
+        bg["costo"] = round(bg["costo"], 2)
         desglose_bodegas.append(bg)
 
     desglose_bodegas.sort(key=lambda x: x["costo"], reverse=True)
@@ -281,13 +263,17 @@ def get_resumen_inventario_puerto(
                 "volumen": 0,
                 "volumen_eq": 0,
                 "costo_producto": 0,
+                "costo_servicio": 0,
                 "costo_flete": 0,
                 "costo": 0,
                 "items_count": 0
             }
         prod_groups[pid]["volumen"] += d.get("volumen") or 0
         prod_groups[pid]["volumen_eq"] += d.get("volumen_eq") or 0
-        prod_groups[pid]["costo_producto"] += d.get("subtotal") or 0
+        prod_groups[pid]["costo_producto"] += d.get("costo_madera_total") if d.get("costo_madera_total") is not None else (d.get("subtotal") or 0)
+        prod_groups[pid]["costo_servicio"] += d.get("costo_servicios_total") or 0
+        prod_groups[pid]["costo_flete"] += d.get("costo_flete_total") or 0
+        prod_groups[pid]["costo"] += d.get("costo_final_total") if d.get("costo_final_total") is not None else ((d.get("subtotal") or 0) + (d.get("costo_servicios_total") or 0) + (d.get("costo_flete_total") or 0))
         prod_groups[pid]["items_count"] += 1
 
     desglose_productos = []
@@ -295,9 +281,9 @@ def get_resumen_inventario_puerto(
         pg["volumen"] = round(pg["volumen"], 3)
         pg["volumen_eq"] = round(pg["volumen_eq"], 3)
         pg["costo_producto"] = round(pg["costo_producto"], 2)
-        p_flete = round((pg["volumen"] / (total_volumen or 1)) * total_flete, 2) if total_volumen > 0 else 0
-        pg["costo_flete"] = p_flete
-        pg["costo"] = round(pg["costo_producto"] + p_flete, 2)
+        pg["costo_servicio"] = round(pg["costo_servicio"], 2)
+        pg["costo_flete"] = round(pg["costo_flete"], 2)
+        pg["costo"] = round(pg["costo"], 2)
         desglose_productos.append(pg)
 
     desglose_productos.sort(key=lambda x: x["costo"], reverse=True)
@@ -306,6 +292,7 @@ def get_resumen_inventario_puerto(
         "total_volumen": total_volumen,
         "total_volumen_eq": total_volumen_eq,
         "total_costo_producto": total_costo_producto,
+        "total_costo_servicio": total_costo_servicio,
         "total_flete": total_flete,
         "total_costo": total_costo,
         "total_items": total_items,
