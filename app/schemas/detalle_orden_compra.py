@@ -19,6 +19,8 @@ class DetalleOrdenCompraCreate(BaseModel):
     volumen: Optional[float] = None
     volumen_eq: Optional[float] = None
     precio_eq: Optional[float] = None
+    comision: Optional[float] = 0.0
+    flete: Optional[float] = 0.0
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"id_orden_compra": 1, "cantidad": 10}]})
 
@@ -35,6 +37,11 @@ class DetalleOrdenCompraRead(BaseModel):
     cantidad: Optional[float] = None
     precio_unitario: Optional[float] = None
     subtotal: Optional[float] = None
+    volumen: Optional[float] = None
+    volumen_eq: Optional[float] = None
+    precio_eq: Optional[float] = None
+    comision: Optional[float] = 0.0
+    flete: Optional[float] = 0.0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,5 +55,8 @@ class DetalleOrdenCompraUpdate(BaseModel):
     volumen: Optional[float] = None
     volumen_eq: Optional[float] = None
     precio_eq: Optional[float] = None
+    comision: Optional[float] = None
+    flete: Optional[float] = None
 
     model_config = ConfigDict()
+

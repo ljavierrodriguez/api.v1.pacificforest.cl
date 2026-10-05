@@ -32,6 +32,9 @@ class DetalleOrdenCompra(Base):
     volumen_eq = Column(Numeric(12, 3))
     precio_eq = Column(Numeric(12, 3))
 
+    comision = Column(Numeric(12, 3), default=0)
+    flete = Column(Numeric(12, 3), default=0)
+
     odc_salida = Column(Integer)
 
     UnidadMedidaLargo = relationship(
@@ -120,6 +123,8 @@ class DetalleOrdenCompra(Base):
             "volumen": _num(self.volumen),
             "volumen_eq": _num(self.volumen_eq),
             "precio_eq": _num(self.precio_eq),
+            "comision": _num(self.comision) if self.comision is not None else 0.0,
+            "flete": _num(self.flete) if self.flete is not None else 0.0,
             "odc_salida": self.odc_salida,
         }
 

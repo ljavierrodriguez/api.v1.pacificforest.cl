@@ -164,8 +164,21 @@ class InventarioPuerto(Base):
         from sqlalchemy.orm import object_session
         sess = object_session(self)
 
-        # 1. Costo Compra Base ($/m3) from origin OC (with SD/BS resolution)
-        costo_compra_m3 = calc_peq or calc_pu or 0.0
+        # 1. Costo Compra Base ($/m3) from origin OC (with SD/BS resolution and comision/flete addition)
+        d_match = None
+        if self.id_detalle_odc and sess:
+            from app.models.detalle_orden_compra import DetalleOrdenCompra
+            d_match = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
+
+        if not d_match and self.id_orden_compra and sess:
+            from app.models.detalle_orden_compra import DetalleOrdenCompra
+            orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == self.id_orden_compra).all()
+            if orig_dets:
+                prod_dets = [d for d in orig_dets if d.id_producto == self.id_producto]
+                if not prod_dets and (self.espesor or self.ancho or self.largo):
+                    prod_dets = [d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)]
+                d_match = prod_dets[0] if prod_dets else orig_dets[0]
+
         oc_raw = str(self.oc_compra or "")
         oc_digits = ""
         if self.oc_compra:
@@ -193,14 +206,20 @@ class InventarioPuerto(Base):
                     else:
                         d_match = prod_dets[0] if prod_dets else orig_dets[0]
 
-                    if d_match:
-                        if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
-                            calc_peq = float(d_match.precio_eq)
-                        elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
-                            calc_peq = float(d_match.precio_unitario)
-                        if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
-                            calc_pu = float(d_match.precio_unitario)
-                        costo_compra_m3 = calc_peq or calc_pu or 0.0
+        comision_odc = 0.0
+        flete_odc = 0.0
+        if d_match:
+            if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
+                calc_peq = float(d_match.precio_eq)
+            elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                calc_peq = float(d_match.precio_unitario)
+            if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                calc_pu = float(d_match.precio_unitario)
+            comision_odc = round(float(getattr(d_match, "comision", 0) or 0.0), 2)
+            flete_odc = round(float(getattr(d_match, "flete", 0) or 0.0), 2)
+
+        precio_base_madera = round(float(calc_peq or calc_pu or 0.0), 2)
+        costo_compra_m3 = round(precio_base_madera + comision_odc + flete_odc, 2)
 
         # 2. Guia Costo Servicio (volumen entrada / volumen salida y servicios)
         # volumen salida = guia costo servicio (flejes de 1 + flejes de 2)
@@ -404,6 +423,9 @@ class InventarioPuerto(Base):
             "observaciones": self.observaciones,
             "estado": self.estado,
             "costo_compra_m3": round(costo_compra_m3, 2),
+            "precio_base_madera": round(precio_base_madera, 2),
+            "comision_odc": round(comision_odc, 2),
+            "flete_odc": round(flete_odc, 2),
             "volumen_entrada_proceso": round(vol_in, 4) if vol_in != 1.0 else None,
             "volumen_salida_proceso": round(vol_out, 4) if vol_out != 1.0 else None,
             "costo_madera_m3": costo_madera_m3,

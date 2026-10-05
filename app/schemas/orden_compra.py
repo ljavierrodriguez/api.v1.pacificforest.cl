@@ -20,7 +20,10 @@ class OrdenCompraDetalleCreate(BaseModel):
     volumen: Optional[Decimal] = None
     volumen_eq: Optional[Decimal] = None
     precio_eq: Optional[Decimal] = None
+    comision: Optional[Decimal] = Field(default=Decimal("0.0"))
+    flete: Optional[Decimal] = Field(default=Decimal("0.0"))
     odc_salida: Optional[int] = None
+
 
 
 class OrdenCompraCreate(BaseModel):

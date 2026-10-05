@@ -135,6 +135,9 @@ class InventarioPuertoRead(InventarioPuertoBase):
     proveedor_nombre: Optional[str] = None
 
     costo_compra_m3: Optional[float] = None
+    precio_base_madera: Optional[float] = None
+    comision_odc: Optional[float] = None
+    flete_odc: Optional[float] = None
     volumen_entrada_proceso: Optional[float] = None
     volumen_salida_proceso: Optional[float] = None
     costo_madera_m3: Optional[float] = None
