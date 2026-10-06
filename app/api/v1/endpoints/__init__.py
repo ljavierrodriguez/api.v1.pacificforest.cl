@@ -35,6 +35,7 @@ from .guia_costo_servicio import router as guia_costo_servicio_router
 from .ide import router as ide_router
 from .inventario_transitorio import router as inventario_transitorio_router
 from .inventario_puerto import router as inventario_puerto_router
+from .inventario_segunda import router as inventario_segunda_router
 from .inventario_dashboard import router as inventario_dashboard_router
 from .moneda import router as moneda_router
 from .naviera import router as naviera_router
@@ -93,6 +94,7 @@ router.include_router(guia_costo_servicio_router, prefix="/guia-costo-servicio",
 router.include_router(ide_router)
 router.include_router(inventario_transitorio_router)
 router.include_router(inventario_puerto_router)
+router.include_router(inventario_segunda_router)
 router.include_router(inventario_dashboard_router)
 router.include_router(moneda_router)
 router.include_router(naviera_router)
