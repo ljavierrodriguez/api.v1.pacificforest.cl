@@ -660,24 +660,52 @@ def update_orden_compra(item_id: int, payload: OrdenCompraUpdate, db: Session = 
     db.add(item)
 
     if detalles_data is not None:
-        db.query(DetalleOrdenCompra).filter(
-            DetalleOrdenCompra.id_orden_compra == item_id
-        ).delete(synchronize_session=False)
+        existing_detalles = {
+            d.id_detalle_odc: d
+            for d in db.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == item_id).all()
+        }
+        kept_ids = set()
 
         for detalle_dict in detalles_data:
             # Remover campos sólo UI si vienen
             detalle_dict.pop("id_especie", None)
             detalle_dict.pop("producto_nombre", None)
             detalle_dict.pop("unidad_venta_nombre", None)
+
+            det_id = detalle_dict.pop("id_detalle_odc", None) or detalle_dict.pop("id_detalle_orden_compra", None)
+
             if detalle_dict.get("subtotal") is None:
                 cant = float(detalle_dict.get("cantidad") or 0)
                 pu = float(detalle_dict.get("precio_unitario") or 0)
                 detalle_dict["subtotal"] = round(cant * pu, 3)
-            detalle_obj = DetalleOrdenCompra(
-                id_orden_compra=item.id_orden_compra,
-                **detalle_dict,
-            )
-            db.add(detalle_obj)
+
+            if det_id and det_id in existing_detalles:
+                existing_obj = existing_detalles[det_id]
+                for k, v in detalle_dict.items():
+                    setattr(existing_obj, k, v)
+                db.add(existing_obj)
+                kept_ids.add(det_id)
+            else:
+                detalle_obj = DetalleOrdenCompra(
+                    id_orden_compra=item.id_orden_compra,
+                    **detalle_dict,
+                )
+                db.add(detalle_obj)
+
+        for old_id, old_obj in existing_detalles.items():
+            if old_id not in kept_ids:
+                from app.models.inventario_puerto import InventarioPuerto
+                from app.models.inventario_transitorio import InventarioTransitorio
+
+                ref_puerto = db.query(InventarioPuerto).filter(InventarioPuerto.id_detalle_odc == old_id).first()
+                ref_trans = db.query(InventarioTransitorio).filter(InventarioTransitorio.id_detalle_odc == old_id).first()
+
+                if ref_puerto or ref_trans:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"No se puede eliminar la línea de detalle #{old_id} porque ya tiene recepciones en inventario.",
+                    )
+                db.delete(old_obj)
     db.flush()
 
     if nuevo_id_proforma:

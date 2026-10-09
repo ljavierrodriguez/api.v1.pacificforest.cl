@@ -5,6 +5,8 @@ from decimal import Decimal
 
 
 class OrdenCompraDetalleCreate(BaseModel):
+    id_detalle_odc: Optional[int] = None
+    id_detalle_orden_compra: Optional[int] = None
     id_producto: Optional[int] = None
     id_unidad_venta: Optional[int] = None
     texto_abierto: Optional[str] = Field(None, max_length=200)
