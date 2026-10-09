@@ -164,47 +164,55 @@ class InventarioPuerto(Base):
         from sqlalchemy.orm import object_session
         sess = object_session(self)
 
+        def _dim_eq(v1, v2):
+            if not v1 or not v2:
+                return True
+            try:
+                return abs(float(str(v1).replace(",", ".")) - float(str(v2).replace(",", "."))) < 0.01
+            except Exception:
+                return str(v1).strip().lower() == str(v2).strip().lower()
+
         # 1. Costo Compra Base ($/m3) from origin OC (with SD/BS resolution and comision/flete addition)
         d_match = None
         if self.id_detalle_odc and sess:
             from app.models.detalle_orden_compra import DetalleOrdenCompra
-            d_match = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
+            cand_det = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
+            if cand_det:
+                if (self.espesor or self.ancho or self.largo) and not (_dim_eq(cand_det.espesor, self.espesor) and _dim_eq(cand_det.ancho, self.ancho) and _dim_eq(cand_det.largo, self.largo)):
+                    d_match = None
+                else:
+                    d_match = cand_det
 
-        if not d_match and self.id_orden_compra and sess:
+        candidate_oc_ids = []
+        if self.id_orden_compra and self.id_orden_compra not in candidate_oc_ids:
+            candidate_oc_ids.append(self.id_orden_compra)
+        import re
+        for raw_field in [self.oc_compra, self.oc, (self.guia.oc if self.guia else None)]:
+            if raw_field:
+                for num_str in re.findall(r"\d+", str(raw_field)):
+                    num_int = int(num_str)
+                    if num_int not in candidate_oc_ids:
+                        candidate_oc_ids.append(num_int)
+
+        if not d_match and candidate_oc_ids and sess:
             from app.models.detalle_orden_compra import DetalleOrdenCompra
-            orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == self.id_orden_compra).all()
+            orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra.in_(candidate_oc_ids)).all()
             if orig_dets:
-                prod_dets = [d for d in orig_dets if d.id_producto == self.id_producto]
-                if not prod_dets and (self.espesor or self.ancho or self.largo):
-                    prod_dets = [d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)]
-                d_match = prod_dets[0] if prod_dets else orig_dets[0]
+                # First try matching product and dimensions
+                dim_matches = [d for d in orig_dets if _dim_eq(d.espesor, self.espesor) and _dim_eq(d.ancho, self.ancho) and _dim_eq(d.largo, self.largo)]
+                
+                raw_str = f"{self.oc_compra or ''} {self.oc or ''}".upper()
+                is_sd = bool(re.search(r"\bSD\b", raw_str) or "SD" in raw_str)
+                is_bs = bool(re.search(r"\bBS\b", raw_str) or "BS" in raw_str)
 
-        oc_raw = str(self.oc_compra or "")
-        oc_digits = ""
-        if self.oc_compra:
-            import re
-            oc_digits = re.sub(r"\D", "", oc_raw)
-            if oc_digits and sess:
-                from app.models.detalle_orden_compra import DetalleOrdenCompra
-                id_oc_orig = int(oc_digits)
-                orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_oc_orig).all()
-                if orig_dets:
-                    prod_dets = [d for d in orig_dets if d.id_producto == self.id_producto]
-                    if not prod_dets and (self.espesor or self.ancho or self.largo):
-                        prod_dets = [d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)]
-                    if not prod_dets:
-                        prod_dets = orig_dets
-
-                    # Check for SD (highest price) or BS (lowest price)
-                    is_sd = bool(re.search(r"\bSD\b", oc_raw, re.IGNORECASE) or "SD" in oc_raw.upper())
-                    is_bs = bool(re.search(r"\bBS\b", oc_raw, re.IGNORECASE) or "BS" in oc_raw.upper())
-
-                    if is_sd and prod_dets:
-                        d_match = max(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                    elif is_bs and prod_dets:
-                        d_match = min(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                    else:
-                        d_match = prod_dets[0] if prod_dets else orig_dets[0]
+                pool = dim_matches if dim_matches else orig_dets
+                if is_sd and pool:
+                    d_match = max(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                elif is_bs and pool:
+                    d_match = min(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                else:
+                    prod_matches = [d for d in pool if self.id_producto and d.id_producto == self.id_producto]
+                    d_match = prod_matches[0] if prod_matches else pool[0]
 
         comision_odc = 0.0
         flete_odc = 0.0
@@ -291,13 +299,14 @@ class InventarioPuerto(Base):
                         elif any(k in mov for k in ["TERMINADO", "1RA", "1ERA", "1°", "FLEJES"]):
                             curr_b["1ra"] += v
 
+            oc_raw = str(self.oc_compra or self.oc or "")
             matched_b = None
-            if rg_blocks and oc_digits:
+            if rg_blocks and candidate_oc_ids:
                 is_sd = "SD" in oc_raw.upper()
                 is_bs = "BS" in oc_raw.upper()
                 for b in rg_blocks:
                     b_oc = b["oc"]
-                    if oc_digits in b_oc:
+                    if any(str(cid) in b_oc for cid in candidate_oc_ids):
                         b_sd = "SD" in b_oc.upper()
                         b_bs = "BS" in b_oc.upper()
                         if (is_sd and b_sd) or (is_bs and b_bs) or (not is_sd and not is_bs and not b_sd and not b_bs) or (not b_sd and not b_bs):
@@ -313,7 +322,7 @@ class InventarioPuerto(Base):
                 if gcs.detalles_proceso:
                     for dp in gcs.detalles_proceso:
                         dp_oc = str(dp.oc_compra_entrada or "")
-                        if oc_digits and oc_digits in dp_oc:
+                        if any(str(cid) in dp_oc for cid in candidate_oc_ids):
                             is_sd = "SD" in oc_raw.upper()
                             is_bs = "BS" in oc_raw.upper()
                             dp_sd = "SD" in dp_oc.upper()

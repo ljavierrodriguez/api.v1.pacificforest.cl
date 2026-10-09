@@ -616,11 +616,30 @@ def recepcionar_orden_compra_puerto(
             db.add(guia_header)
             db.flush()
 
+            def _dim_eq(v1, v2):
+                if not v1 or not v2:
+                    return True
+                try:
+                    return abs(float(str(v1).replace(",", ".")) - float(str(v2).replace(",", "."))) < 0.01
+                except Exception:
+                    return str(v1).strip().lower() == str(v2).strip().lower()
+
             g_items = g.items or []
             if g_items:
                 for item_override in g_items:
                     id_det = item_override.id_detalle_odc or item_override.id_detalle_os
-                    d = detalles_by_id.get(id_det) if id_det else detalles[0]
+                    d = detalles_by_id.get(id_det) if id_det else None
+                    if not d or ((item_override.espesor or item_override.ancho or item_override.largo) and not (
+                        _dim_eq(d.espesor, item_override.espesor) and _dim_eq(d.ancho, item_override.ancho) and _dim_eq(d.largo, item_override.largo)
+                    )):
+                        dim_matches = [
+                            dt for dt in detalles
+                            if _dim_eq(dt.espesor, item_override.espesor) and _dim_eq(dt.ancho, item_override.ancho) and _dim_eq(dt.largo, item_override.largo)
+                        ]
+                        if dim_matches:
+                            d = dim_matches[0]
+                        elif not d:
+                            d = detalles[0]
                     cant = item_override.cantidad if item_override.cantidad is not None else d.cantidad
                     pzs = item_override.piezas if item_override.piezas is not None else None
                     vol = item_override.volumen if item_override.volumen is not None else d.volumen

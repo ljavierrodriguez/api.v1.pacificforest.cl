@@ -139,45 +139,66 @@ class InventarioTransitorio(Base):
         calc_peq = _num(self.precio_eq)
         calc_sub = _num(self.subtotal)
 
-        if hasattr(self, "oc_compra") and self.oc_compra:
-            import re
-            oc_raw = str(self.oc_compra)
-            oc_digits = re.sub(r"\D", "", oc_raw)
-            if oc_digits:
-                from sqlalchemy.orm import object_session
-                sess = object_session(self)
-                if sess:
-                    from app.models.detalle_orden_compra import DetalleOrdenCompra
-                    id_oc_orig = int(oc_digits)
-                    orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra == id_oc_orig).all()
-                    if orig_dets:
-                        prod_dets = [d for d in orig_dets if d.id_producto == self.id_producto]
-                        if not prod_dets and (self.espesor or self.ancho or self.largo):
-                            prod_dets = [d for d in orig_dets if (not d.espesor or d.espesor == self.espesor) and (not d.ancho or d.ancho == self.ancho) and (not d.largo or d.largo == self.largo)]
-                        if not prod_dets:
-                            prod_dets = orig_dets
+        def _dim_eq(v1, v2):
+            if not v1 or not v2:
+                return True
+            try:
+                return abs(float(str(v1).replace(",", ".")) - float(str(v2).replace(",", "."))) < 0.01
+            except Exception:
+                return str(v1).strip().lower() == str(v2).strip().lower()
 
-                        # Check for SD (highest price) or BS (lowest price)
-                        is_sd = bool(re.search(r"\bSD\b", oc_raw, re.IGNORECASE) or "SD" in oc_raw.upper())
-                        is_bs = bool(re.search(r"\bBS\b", oc_raw, re.IGNORECASE) or "BS" in oc_raw.upper())
+        from sqlalchemy.orm import object_session
+        sess = object_session(self)
 
-                        if is_sd and prod_dets:
-                            d_match = max(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                        elif is_bs and prod_dets:
-                            d_match = min(prod_dets, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                        else:
-                            d_match = prod_dets[0] if prod_dets else orig_dets[0]
+        d_match = None
+        if getattr(self, "id_detalle_odc", None) and sess:
+            from app.models.detalle_orden_compra import DetalleOrdenCompra
+            cand_det = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
+            if cand_det:
+                if (self.espesor or self.ancho or self.largo) and not (_dim_eq(cand_det.espesor, self.espesor) and _dim_eq(cand_det.ancho, self.ancho) and _dim_eq(cand_det.largo, self.largo)):
+                    d_match = None
+                else:
+                    d_match = cand_det
 
-                        if d_match:
-                            if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
-                                calc_peq = float(d_match.precio_eq)
-                            elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
-                                calc_peq = float(d_match.precio_unitario)
-                            if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
-                                calc_pu = float(d_match.precio_unitario)
-                            vol_val = _num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0
-                            if calc_peq and vol_val:
-                                calc_sub = round(vol_val * calc_peq, 2)
+        candidate_oc_ids = []
+        if getattr(self, "id_orden_compra", None) and self.id_orden_compra not in candidate_oc_ids:
+            candidate_oc_ids.append(self.id_orden_compra)
+        import re
+        for raw_field in [getattr(self, "oc_compra", None), getattr(self, "numero_proforma", None), (self.guia.numero_proforma if self.guia else None)]:
+            if raw_field:
+                for num_str in re.findall(r"\d+", str(raw_field)):
+                    num_int = int(num_str)
+                    if num_int not in candidate_oc_ids:
+                        candidate_oc_ids.append(num_int)
+
+        if not d_match and candidate_oc_ids and sess:
+            from app.models.detalle_orden_compra import DetalleOrdenCompra
+            orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra.in_(candidate_oc_ids)).all()
+            if orig_dets:
+                dim_matches = [d for d in orig_dets if _dim_eq(d.espesor, self.espesor) and _dim_eq(d.ancho, self.ancho) and _dim_eq(d.largo, self.largo)]
+                raw_str = f"{getattr(self, 'oc_compra', '') or ''} {getattr(self, 'numero_proforma', '') or ''}".upper()
+                is_sd = bool(re.search(r"\bSD\b", raw_str) or "SD" in raw_str)
+                is_bs = bool(re.search(r"\bBS\b", raw_str) or "BS" in raw_str)
+
+                pool = dim_matches if dim_matches else orig_dets
+                if is_sd and pool:
+                    d_match = max(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                elif is_bs and pool:
+                    d_match = min(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+                else:
+                    prod_matches = [d for d in pool if self.id_producto and d.id_producto == self.id_producto]
+                    d_match = prod_matches[0] if prod_matches else pool[0]
+
+        if d_match:
+            if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
+                calc_peq = float(d_match.precio_eq)
+            elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                calc_peq = float(d_match.precio_unitario)
+            if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
+                calc_pu = float(d_match.precio_unitario)
+            vol_val = _num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0
+            if calc_peq and vol_val:
+                calc_sub = round(vol_val * calc_peq, 2)
 
         return {
             "id_inventario_transitorio": self.id_inventario_transitorio,
