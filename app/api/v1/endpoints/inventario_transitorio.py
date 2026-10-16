@@ -18,6 +18,13 @@ from app.schemas.inventario_transitorio import (
     GuiaInventarioTransitorioRead,
     PaginatedGuiaInventarioTransitorioResponse,
     RecepcionarOrdenCompraPayload,
+    ResumenInventarioTransitorioResponse,
+)
+from app.services.inventario_transitorio_service import (
+    calculate_transitorio_consumo_map,
+    enrich_item_dict,
+    enrich_guia_dict,
+    get_transitorio_consumo_resumen,
 )
 
 router = APIRouter(prefix="/inventario_transitorio", tags=["inventario_transitorio"])
@@ -89,7 +96,11 @@ def get_inventario_transitorio(
         .all()
     )
 
-    items_read = [InventarioTransitorioRead(**item.to_dict()) for item in items]
+    consumo_map = calculate_transitorio_consumo_map(db)
+    items_read = [
+        InventarioTransitorioRead(**enrich_item_dict(item.to_dict(), consumo_map))
+        for item in items
+    ]
 
     return PaginatedInventarioTransitorioResponse(
         items=items_read,
@@ -159,7 +170,11 @@ def get_guias_inventario_transitorio(
         .all()
     )
 
-    items_read = [GuiaInventarioTransitorioRead(**item.to_dict()) for item in items]
+    consumo_map = calculate_transitorio_consumo_map(db)
+    items_read = [
+        GuiaInventarioTransitorioRead(**enrich_guia_dict(item.to_dict(), consumo_map))
+        for item in items
+    ]
 
     return PaginatedGuiaInventarioTransitorioResponse(
         items=items_read,
@@ -174,132 +189,15 @@ def get_guias_inventario_transitorio(
 
 @router.get(
     "/resumen",
+    response_model=ResumenInventarioTransitorioResponse,
     summary="GET Resumen de Inventario Transitorio",
-    description="Obtener métricas agregadas de volumen, costo y desgloses por bodega y producto."
+    description="Obtener métricas agregadas de madera recibida, utilizada en servicio, saldo disponible y desgloses por OC, bodega y producto."
 )
 def get_resumen_inventario_transitorio(
     id_bodega: Optional[int] = Query(None, description="Filtrar por ID de bodega"),
     db: Session = Depends(get_db),
 ):
-    from app.models.orden_servicio import OrdenServicio
-    from app.models.guia_costo_servicio import GuiaCostoServicio
-
-    q = db.query(InventarioTransitorio)
-    if id_bodega:
-        q = q.filter(InventarioTransitorio.id_bodega == id_bodega)
-    items = q.all()
-
-    item_dicts = [t.to_dict() for t in items]
-    total_volumen = round(sum(d.get("volumen") or 0 for d in item_dicts), 3)
-    total_volumen_eq = round(sum(d.get("volumen_eq") or 0 for d in item_dicts), 3)
-    total_costo_producto = round(sum(d.get("subtotal") or 0 for d in item_dicts), 2)
-    total_items = len(item_dicts)
-    total_paquetes = sum(d.get("numero_paquetes") or 1 for d in item_dicts)
-    total_piezas = round(sum(d.get("piezas") or 0 for d in item_dicts), 2)
-
-    # Calculate linked fletes
-    os_ids = set()
-    for t in items:
-        if t.id_orden_compra:
-            linked_os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == t.id_orden_compra).all()
-            for los in linked_os:
-                os_ids.add(los.id_orden_servicio)
-
-    guias_numeros = {t.numero_guia for t in items if t.numero_guia}
-    for gnum in guias_numeros:
-        gcs = db.query(GuiaCostoServicio).filter(GuiaCostoServicio.numero_guia == gnum).first()
-        if gcs:
-            for los in gcs.ordenes_servicio:
-                os_ids.add(los.id_orden_servicio)
-
-    total_flete = 0
-    for os_id in os_ids:
-        os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_servicio == os_id).first()
-        if os and os.flete:
-            total_flete += float(os.flete)
-    total_flete = round(total_flete, 2)
-    total_costo = round(total_costo_producto + total_flete, 2)
-
-    # Breakdown by bodega
-    bodega_groups = {}
-    for d in item_dicts:
-        bid = d.get("id_bodega")
-        bname = d.get("bodega_nombre") or "Sin Bodega"
-        if bid not in bodega_groups:
-            bodega_groups[bid] = {
-                "id_bodega": bid,
-                "nombre": bname,
-                "volumen": 0,
-                "volumen_eq": 0,
-                "costo_producto": 0,
-                "costo_flete": 0,
-                "costo": 0,
-                "items_count": 0,
-                "paquetes_count": 0
-            }
-        bodega_groups[bid]["volumen"] += d.get("volumen") or 0
-        bodega_groups[bid]["volumen_eq"] += d.get("volumen_eq") or 0
-        bodega_groups[bid]["costo_producto"] += d.get("subtotal") or 0
-        bodega_groups[bid]["items_count"] += 1
-        bodega_groups[bid]["paquetes_count"] += d.get("numero_paquetes") or 1
-
-    desglose_bodegas = []
-    for bid, bg in bodega_groups.items():
-        bg["volumen"] = round(bg["volumen"], 3)
-        bg["volumen_eq"] = round(bg["volumen_eq"], 3)
-        bg["costo_producto"] = round(bg["costo_producto"], 2)
-        b_flete = round((bg["volumen"] / (total_volumen or 1)) * total_flete, 2) if total_volumen > 0 else 0
-        bg["costo_flete"] = b_flete
-        bg["costo"] = round(bg["costo_producto"] + b_flete, 2)
-        desglose_bodegas.append(bg)
-
-    desglose_bodegas.sort(key=lambda x: x["costo"], reverse=True)
-
-    # Breakdown by producto
-    prod_groups = {}
-    for d in item_dicts:
-        pid = d.get("id_producto")
-        pname = d.get("producto_nombre") or d.get("texto_abierto") or "Sin Producto"
-        if pid not in prod_groups:
-            prod_groups[pid] = {
-                "id_producto": pid,
-                "nombre": pname,
-                "volumen": 0,
-                "volumen_eq": 0,
-                "costo_producto": 0,
-                "costo_flete": 0,
-                "costo": 0,
-                "items_count": 0
-            }
-        prod_groups[pid]["volumen"] += d.get("volumen") or 0
-        prod_groups[pid]["volumen_eq"] += d.get("volumen_eq") or 0
-        prod_groups[pid]["costo_producto"] += d.get("subtotal") or 0
-        prod_groups[pid]["items_count"] += 1
-
-    desglose_productos = []
-    for pid, pg in prod_groups.items():
-        pg["volumen"] = round(pg["volumen"], 3)
-        pg["volumen_eq"] = round(pg["volumen_eq"], 3)
-        pg["costo_producto"] = round(pg["costo_producto"], 2)
-        p_flete = round((pg["volumen"] / (total_volumen or 1)) * total_flete, 2) if total_volumen > 0 else 0
-        pg["costo_flete"] = p_flete
-        pg["costo"] = round(pg["costo_producto"] + p_flete, 2)
-        desglose_productos.append(pg)
-
-    desglose_productos.sort(key=lambda x: x["costo"], reverse=True)
-
-    return {
-        "total_volumen": total_volumen,
-        "total_volumen_eq": total_volumen_eq,
-        "total_costo_producto": total_costo_producto,
-        "total_flete": total_flete,
-        "total_costo": total_costo,
-        "total_items": total_items,
-        "total_paquetes": total_paquetes,
-        "total_piezas": total_piezas,
-        "desglose_bodegas": desglose_bodegas,
-        "desglose_productos": desglose_productos,
-    }
+    return get_transitorio_consumo_resumen(db, id_bodega=id_bodega)
 
 
 @router.get(
@@ -311,7 +209,8 @@ def get_inventario_transitorio_by_id(item_id: int, db: Session = Depends(get_db)
     item = db.query(InventarioTransitorio).filter(InventarioTransitorio.id_inventario_transitorio == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Registro de inventario transitorio no encontrado.")
-    return InventarioTransitorioRead(**item.to_dict())
+    consumo_map = calculate_transitorio_consumo_map(db)
+    return InventarioTransitorioRead(**enrich_item_dict(item.to_dict(), consumo_map))
 
 
 @router.post(
