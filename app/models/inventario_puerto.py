@@ -261,9 +261,13 @@ class InventarioPuerto(Base):
         # volumen salida = guia costo servicio (flejes de 1 + flejes de 2)
         vol_in = 1.0
         vol_out = 1.0
+        vol_out_1ra = 0.0
+        vol_out_2da = 0.0
         gcs = None
         servicios_m3 = 0.0
         total_vol_salida_gcs = 0.0
+        vol_1ra_tot = 0.0
+        vol_2da_tot = 0.0
 
         if num_guia and sess:
             from app.models.guia_costo_servicio import GuiaCostoServicio
@@ -344,6 +348,8 @@ class InventarioPuerto(Base):
             if matched_b and (matched_b["1ra"] + matched_b["2da"]) > 0:
                 vol_in = matched_b["in"] if matched_b["in"] > 0 else 1.0
                 vol_out = matched_b["1ra"] + matched_b["2da"]
+                vol_out_1ra = matched_b["1ra"]
+                vol_out_2da = matched_b["2da"]
             else:
                 # Match en detalles_proceso de GCS
                 matched_dp = None
@@ -465,6 +471,11 @@ class InventarioPuerto(Base):
             "flete_odc": round(flete_odc, 2),
             "volumen_entrada_proceso": round(vol_in, 4) if vol_in != 1.0 else None,
             "volumen_salida_proceso": round(vol_out, 4) if vol_out != 1.0 else None,
+            "volumen_salida_1ra": round(vol_out_1ra, 4) if vol_out_1ra > 0 else None,
+            "volumen_salida_2da": round(vol_out_2da, 4) if vol_out_2da > 0 else None,
+            "volumen_salida_1ra_guia": round(vol_1ra_tot, 4) if vol_1ra_tot > 0 else None,
+            "volumen_salida_2da_guia": round(vol_2da_tot, 4) if vol_2da_tot > 0 else None,
+            "volumen_total_salida_gcs": round(total_vol_salida_gcs, 4) if total_vol_salida_gcs > 0 else None,
             "costo_madera_m3": costo_madera_m3,
             "servicios_m3": servicios_m3,
             "flete_m3": flete_m3,

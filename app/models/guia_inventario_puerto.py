@@ -69,6 +69,9 @@ class GuiaInventarioPuerto(Base):
         flete_m3 = detalles_list[0].get("flete_m3", 0.0) if detalles_list else 0.0
         tiene_os = any(d.get("tiene_orden_servicio") for d in detalles_list)
         id_os = self.id_orden_servicio or (detalles_list[0].get("id_orden_servicio") if detalles_list else None)
+        vol_salida_1ra_guia = detalles_list[0].get("volumen_salida_1ra_guia") if detalles_list else None
+        vol_salida_2da_guia = detalles_list[0].get("volumen_salida_2da_guia") if detalles_list else None
+        vol_total_salida_gcs = detalles_list[0].get("volumen_total_salida_gcs") if detalles_list else None
 
         return {
             "id_guia_inventario_puerto": self.id_guia_inventario_puerto,
@@ -95,6 +98,9 @@ class GuiaInventarioPuerto(Base):
             "servicios_m3": servicios_m3,
             "flete_m3": flete_m3,
             "tiene_orden_servicio": tiene_os,
+            "volumen_salida_1ra": vol_salida_1ra_guia,
+            "volumen_salida_2da": vol_salida_2da_guia,
+            "volumen_total_salida_gcs": vol_total_salida_gcs,
             "detalles": detalles_list,
         }
 
