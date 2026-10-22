@@ -164,35 +164,63 @@ class InventarioPuerto(Base):
         from sqlalchemy.orm import object_session
         sess = object_session(self)
 
+        def _parse_dim(v):
+            if v is None:
+                return None
+            s = str(v).strip().lower()
+            if not s:
+                return None
+            import re
+            m = re.match(r"^(\d+),(\d{3})$", s)
+            if m:
+                s = m.group(1) + m.group(2)
+            try:
+                return float(s.replace(",", "."))
+            except Exception:
+                return s
+
         def _dim_eq(v1, v2):
             if not v1 or not v2:
                 return True
-            try:
-                return abs(float(str(v1).replace(",", ".")) - float(str(v2).replace(",", "."))) < 0.01
-            except Exception:
-                return str(v1).strip().lower() == str(v2).strip().lower()
+            p1 = _parse_dim(v1)
+            p2 = _parse_dim(v2)
+            if isinstance(p1, float) and isinstance(p2, float):
+                return abs(p1 - p2) < 0.01
+            return str(p1).strip().lower() == str(p2).strip().lower()
 
         # 1. Costo Compra Base ($/m3) from origin OC (with SD/BS resolution and comision/flete addition)
+        import re
+        candidate_oc_ids = []
+        # Prioridad 1: OC de compra de origen del lote/paquete (oc_compra)
+        if self.oc_compra:
+            for num_str in re.findall(r"\d+", str(self.oc_compra)):
+                num_int = int(num_str)
+                if num_int not in candidate_oc_ids:
+                    candidate_oc_ids.append(num_int)
+
+        # Prioridad 2: Si no hubo oc_compra, recurrir a id_orden_compra, oc o guia.oc
+        if not candidate_oc_ids:
+            if self.id_orden_compra and self.id_orden_compra not in candidate_oc_ids:
+                candidate_oc_ids.append(self.id_orden_compra)
+            for raw_field in [self.oc, (self.guia.oc if self.guia else None)]:
+                if raw_field:
+                    for num_str in re.findall(r"\d+", str(raw_field)):
+                        num_int = int(num_str)
+                        if num_int not in candidate_oc_ids:
+                            candidate_oc_ids.append(num_int)
+
         d_match = None
         if self.id_detalle_odc and sess:
             from app.models.detalle_orden_compra import DetalleOrdenCompra
             cand_det = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
             if cand_det:
-                if (self.espesor or self.ancho or self.largo) and not (_dim_eq(cand_det.espesor, self.espesor) and _dim_eq(cand_det.ancho, self.ancho) and _dim_eq(cand_det.largo, self.largo)):
+                # Verificar que el detalle pertenezca a la OC origen correcta si existe candidate_oc_ids
+                if candidate_oc_ids and cand_det.id_orden_compra not in candidate_oc_ids:
+                    d_match = None
+                elif (self.espesor or self.ancho or self.largo) and not (_dim_eq(cand_det.espesor, self.espesor) and _dim_eq(cand_det.ancho, self.ancho) and _dim_eq(cand_det.largo, self.largo)):
                     d_match = None
                 else:
                     d_match = cand_det
-
-        candidate_oc_ids = []
-        if self.id_orden_compra and self.id_orden_compra not in candidate_oc_ids:
-            candidate_oc_ids.append(self.id_orden_compra)
-        import re
-        for raw_field in [self.oc_compra, self.oc, (self.guia.oc if self.guia else None)]:
-            if raw_field:
-                for num_str in re.findall(r"\d+", str(raw_field)):
-                    num_int = int(num_str)
-                    if num_int not in candidate_oc_ids:
-                        candidate_oc_ids.append(num_int)
 
         if not d_match and candidate_oc_ids and sess:
             from app.models.detalle_orden_compra import DetalleOrdenCompra
