@@ -69,6 +69,37 @@ class GuiaInventarioPuerto(Base):
         flete_m3 = detalles_list[0].get("flete_m3", 0.0) if detalles_list else 0.0
         tiene_os = any(d.get("tiene_orden_servicio") for d in detalles_list)
         id_os = self.id_orden_servicio or (detalles_list[0].get("id_orden_servicio") if detalles_list else None)
+
+        from sqlalchemy.orm import object_session
+        sess = object_session(self)
+        os_flete_val = None
+        if id_os and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_rec = sess.get(OrdenServicio, id_os)
+            if os_rec and os_rec.flete is not None:
+                os_flete_val = float(os_rec.flete)
+
+        if os_flete_val is not None:
+            total_flete = round(os_flete_val, 2)
+            if total_volumen > 0:
+                flete_m3 = round(total_flete / total_volumen, 2)
+            if detalles_list and total_volumen > 0:
+                cur_sum = 0.0
+                for d in detalles_list:
+                    it_vol = float(d.get("volumen_eq") or d.get("volumen") or 0.0)
+                    it_flete = round((it_vol / total_volumen) * total_flete, 2)
+                    d["costo_flete_total"] = it_flete
+                    cur_sum += it_flete
+                diff = round(total_flete - cur_sum, 2)
+                if diff != 0.0:
+                    detalles_list[-1]["costo_flete_total"] = round(detalles_list[-1]["costo_flete_total"] + diff, 2)
+                for d in detalles_list:
+                    d["flete_m3"] = flete_m3
+                    d["costo_final_unitario"] = round(float(d.get("costo_madera_m3") or 0) + float(d.get("servicios_m3") or 0) + flete_m3, 2)
+                    d["costo_final_total"] = round(float(d.get("costo_madera_total") or 0) + float(d.get("costo_servicios_total") or 0) + float(d.get("costo_flete_total") or 0), 2)
+
+        total_costo_final = sum(d.get("costo_final_total") or 0 for d in detalles_list)
+        costo_final_promedio_m3 = round(total_costo_final / total_volumen, 2) if total_volumen > 0 else 0.0
         vol_salida_1ra_guia = detalles_list[0].get("volumen_salida_1ra_guia") if detalles_list else None
         vol_salida_2da_guia = detalles_list[0].get("volumen_salida_2da_guia") if detalles_list else None
         vol_total_salida_gcs = detalles_list[0].get("volumen_total_salida_gcs") if detalles_list else None

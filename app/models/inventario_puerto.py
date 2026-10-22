@@ -416,8 +416,16 @@ class InventarioPuerto(Base):
             id_os_linked = os_obj.id_orden_servicio
             if os_obj.flete:
                 flete_total = float(os_obj.flete)
-                divisor_vol = total_vol_salida_gcs if total_vol_salida_gcs > 0 else (_num(self.volumen_eq) or _num(self.volumen) or 1.0)
-                flete_m3 = round(flete_total / divisor_vol, 2)
+                # El flete de transporte corresponde a la carga trasladada a puerto en la guía
+                vol_transporte = 0.0
+                if g and g.detalles:
+                    vol_transporte = sum(float(it.volumen_eq or it.volumen or 0) for it in g.detalles)
+                if vol_transporte <= 0 and vol_1ra_tot > 0:
+                    vol_transporte = vol_1ra_tot
+                if vol_transporte <= 0:
+                    vol_transporte = _num(self.volumen_eq) or _num(self.volumen) or 1.0
+
+                flete_m3 = round(flete_total / vol_transporte, 2)
 
         # 5. Costo Final (Unitario y Totales)
         # Formula: ((cantidad volumen entrada x costo compra) / volumen salida) + servicios + flete
