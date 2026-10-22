@@ -140,6 +140,11 @@ class InventarioPuertoRead(InventarioPuertoBase):
     flete_odc: Optional[float] = None
     volumen_entrada_proceso: Optional[float] = None
     volumen_salida_proceso: Optional[float] = None
+    volumen_salida_1ra: Optional[float] = None
+    volumen_salida_2da: Optional[float] = None
+    volumen_salida_1ra_guia: Optional[float] = None
+    volumen_salida_2da_guia: Optional[float] = None
+    volumen_total_salida_gcs: Optional[float] = None
     costo_madera_m3: Optional[float] = None
     servicios_m3: Optional[float] = None
     flete_m3: Optional[float] = None
@@ -178,6 +183,9 @@ class GuiaInventarioPuertoRead(BaseModel):
     servicios_m3: Optional[float] = 0.0
     flete_m3: Optional[float] = 0.0
     tiene_orden_servicio: Optional[bool] = False
+    volumen_salida_1ra: Optional[float] = None
+    volumen_salida_2da: Optional[float] = None
+    volumen_total_salida_gcs: Optional[float] = None
     detalles: List[InventarioPuertoRead] = []
 
     model_config = ConfigDict(from_attributes=True)

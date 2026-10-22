@@ -275,27 +275,30 @@ class InventarioPuerto(Base):
 
         if gcs:
             # Calcular volumen total salida guia (flejes 1ra + flejes 2da)
-            vol_1ra_tot = float(gcs.total_m3 or 0)
-            vol_2da_tot = float(gcs.flejes_2da or 0)
+            # Para 2da: Consolidar total desde stock_planta o la suma de resumen_general si existen
+            sum_sp_2da = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock and any(k in sp.tipo_stock.upper() for k in ["2DA", "2ERA", "2°", "2"])) if gcs.stock_planta else 0.0
+            sum_rg_2da = sum(
+                float(rg.volumen_m3 or 0)
+                for rg in gcs.resumen_general
+                if rg.movimiento and any(k in rg.movimiento.upper() for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"])
+            ) if gcs.resumen_general else 0.0
 
-            # Fallback a stock_planta si total_m3 o flejes_2da están vacíos
+            if sum_sp_2da > 0:
+                vol_2da_tot = sum_sp_2da
+            elif sum_rg_2da > 0:
+                vol_2da_tot = sum_rg_2da
+            else:
+                vol_2da_tot = float(gcs.flejes_2da or 0)
+
+            # Para 1ra: total_m3 de cabecera o fallback a stock_planta / resumen_general
+            vol_1ra_tot = float(gcs.total_m3 or 0)
             if vol_1ra_tot <= 0 and gcs.stock_planta:
                 vol_1ra_tot = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock and any(k in sp.tipo_stock.upper() for k in ["1RA", "1ERA", "1°", "1", "TERMINADO"]))
-            if vol_2da_tot <= 0 and gcs.stock_planta:
-                vol_2da_tot = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock and any(k in sp.tipo_stock.upper() for k in ["2DA", "2ERA", "2°", "2"]))
-
-            # Fallback a resumen_general
             if vol_1ra_tot <= 0 and gcs.resumen_general:
                 vol_1ra_tot = sum(
                     float(rg.volumen_m3 or 0)
                     for rg in gcs.resumen_general
                     if rg.movimiento and any(k in rg.movimiento.upper() for k in ["TERMINADO", "1RA", "1ERA", "1°", "FLEJES TERMINADO", "FLEJES 1RA", "FLEJES 1ERA"]) and "2DA" not in (rg.movimiento or "").upper()
-                )
-            if vol_2da_tot <= 0 and gcs.resumen_general:
-                vol_2da_tot = sum(
-                    float(rg.volumen_m3 or 0)
-                    for rg in gcs.resumen_general
-                    if rg.movimiento and any(k in rg.movimiento.upper() for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"])
                 )
 
             total_vol_salida_gcs = vol_1ra_tot + vol_2da_tot
