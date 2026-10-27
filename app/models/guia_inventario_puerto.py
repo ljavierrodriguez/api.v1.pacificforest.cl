@@ -65,7 +65,7 @@ class GuiaInventarioPuerto(Base):
         total_costo_final = sum(d.get("costo_final_total") or 0 for d in detalles_list)
         costo_final_promedio_m3 = round(total_costo_final / total_volumen, 2) if total_volumen > 0 else 0.0
 
-        servicios_m3 = detalles_list[0].get("servicios_m3", 0.0) if detalles_list else 0.0
+        servicios_m3 = round(total_servicios / total_volumen, 2) if total_volumen > 0 else (detalles_list[0].get("servicios_m3", 0.0) if detalles_list else 0.0)
         flete_m3 = detalles_list[0].get("flete_m3", 0.0) if detalles_list else 0.0
         tiene_os = any(d.get("tiene_orden_servicio") for d in detalles_list)
         id_os = self.id_orden_servicio or (detalles_list[0].get("id_orden_servicio") if detalles_list else None)
