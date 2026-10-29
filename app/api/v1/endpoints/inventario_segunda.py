@@ -44,10 +44,36 @@ def _is_2da_movimiento(movimiento: Optional[str]) -> bool:
     return any(k in m for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"])
 
 
+def _get_effective_2da_stock_planta(guia: GuiaCostoServicio) -> List[GuiaCostoStockPlanta]:
+    if not guia.stock_planta:
+        return []
+    explicit_2da = [sp for sp in guia.stock_planta if _is_2da_stock(sp.tipo_stock)]
+    if explicit_2da:
+        return explicit_2da
+    # En el nuevo formato de Excel (ej. guía 10122), el cuadro único de Stock Planta corresponde a 2da
+    sum_all_sp = sum(float(sp.volumen_m3 or 0) for sp in guia.stock_planta)
+    if sum_all_sp <= 0:
+        return []
+    f2da = float(guia.flejes_2da or 0)
+    sum_rg_2da = sum(
+        float(rg.volumen_m3 or 0)
+        for rg in (guia.resumen_general or [])
+        if _is_2da_movimiento(rg.movimiento)
+    )
+    tot_1ra = float(guia.total_m3 or 0)
+    if (
+        (f2da > 0 and abs(sum_all_sp - f2da) < 0.5)
+        or (sum_rg_2da > 0 and abs(sum_all_sp - sum_rg_2da) < 0.5)
+        or ((f2da > 0 or sum_rg_2da > 0) and tot_1ra > 0 and abs(sum_all_sp - tot_1ra) > 1.0)
+    ):
+        return list(guia.stock_planta)
+    return []
+
+
 def _guia_has_segunda(guia: GuiaCostoServicio) -> bool:
     if guia.flejes_2da is not None and float(guia.flejes_2da) > 0:
         return True
-    if guia.stock_planta and any(_is_2da_stock(sp.tipo_stock) for sp in guia.stock_planta):
+    if _get_effective_2da_stock_planta(guia):
         return True
     if guia.resumen_general and any(_is_2da_movimiento(rg.movimiento) for rg in guia.resumen_general):
         return True
@@ -100,7 +126,15 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
 
     for rg in rows_2da:
         vol_rg = float(rg.volumen_m3 or 0)
-        oc_str = str(rg.oc_tabla or "")
+
+        # Match bloque primero (en el nuevo formato la columna OC/Tabla solo viene en la fila Entrada rústico del bloque)
+        matched_b = None
+        for b in rg_blocks:
+            if rg in b["rg_items"]:
+                matched_b = b
+                break
+
+        oc_str = str(rg.oc_tabla or (matched_b["oc"] if matched_b else "") or "")
 
         cands = [int(n) for n in re.findall(r"\d+", oc_str)]
         if 8059 in cands and 8057 not in cands:
@@ -110,37 +144,38 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
         if not cands and guia.ordenes_compra:
             cands = [oc.id_orden_compra for oc in guia.ordenes_compra]
 
-        # Match bloque
-        matched_b = None
         is_sd = "SD" in oc_str.upper()
         is_bs = "BS" in oc_str.upper()
-        for b in rg_blocks:
-            if rg in b["rg_items"]:
-                matched_b = b
-                break
-            b_oc = b["oc"]
-            if any(str(cid) in b_oc for cid in cands):
-                b_sd = "SD" in b_oc.upper()
-                b_bs = "BS" in b_oc.upper()
-                if (is_sd and b_sd) or (is_bs and b_bs) or (not is_sd and not is_bs and not b_sd and not b_bs):
-                    matched_b = b
-                    break
+        if not matched_b:
+            for b in rg_blocks:
+                b_oc = b["oc"]
+                if any(str(cid) in b_oc for cid in cands):
+                    b_sd = "SD" in b_oc.upper()
+                    b_bs = "BS" in b_oc.upper()
+                    if (is_sd and b_sd) or (is_bs and b_bs) or (not is_sd and not is_bs and not b_sd and not b_bs):
+                        matched_b = b
+                        break
 
-        # Match detalle proceso
-        matched_dp = None
+        # Match detalle proceso (puede haber múltiples líneas para la misma OC, ej. distintas escuadrías)
+        matched_dps = []
         if guia.detalles_proceso:
+            exact_dps = []
+            fallback_dps = []
             for dp in guia.detalles_proceso:
                 dp_oc = str(dp.oc_compra_entrada or "")
                 if any(str(cid) in dp_oc for cid in cands):
                     dp_sd = "SD" in dp_oc.upper()
                     dp_bs = "BS" in dp_oc.upper()
                     if (is_sd and dp_sd) or (is_bs and dp_bs) or (not is_sd and not is_bs and not dp_sd and not dp_bs):
-                        matched_dp = dp
-                        break
-                    elif not matched_dp:
-                        matched_dp = dp
-            if not matched_dp and len(guia.detalles_proceso) == 1:
-                matched_dp = guia.detalles_proceso[0]
+                        exact_dps.append(dp)
+                    else:
+                        fallback_dps.append(dp)
+            matched_dps = exact_dps if exact_dps else fallback_dps
+            if not matched_dps and len(guia.detalles_proceso) == 1:
+                matched_dps = [guia.detalles_proceso[0]]
+        matched_dp = matched_dps[0] if matched_dps else None
+        sum_dp_in = sum(float(d.volumen_m3_entrada or 0) for d in matched_dps)
+        sum_dp_out = sum(float(d.volumen_m3_salida or 0) for d in matched_dps)
 
         # Calcular volumen de entrada y salida para rendimiento
         vol_in = 1.0
@@ -150,9 +185,7 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
                 vol_in = matched_b["in"]
                 vol_out = matched_b["1ra"] + matched_b["2da"]
             else:
-                dp_vol_cand = float(matched_dp.volumen_m3_entrada or 0) if matched_dp else 0.0
-                if dp_vol_cand <= 0 and matched_dp and matched_dp.volumen_m3_salida:
-                    dp_vol_cand = float(matched_dp.volumen_m3_salida)
+                dp_vol_cand = sum_dp_in if sum_dp_in > 0 else sum_dp_out
                 sum_salida = matched_b["1ra"] + matched_b["2da"]
                 if dp_vol_cand > 0 and sum_salida > 0:
                     vol_in = dp_vol_cand
@@ -160,10 +193,10 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
                 else:
                     vol_in = 1.0
                     vol_out = 1.0
-        elif matched_dp and matched_dp.volumen_m3_entrada:
-            vol_in = float(matched_dp.volumen_m3_entrada)
-            if matched_dp.volumen_m3_salida:
-                vol_out = float(matched_dp.volumen_m3_salida)
+        elif sum_dp_in > 0:
+            vol_in = sum_dp_in
+            if sum_dp_out > 0:
+                vol_out = sum_dp_out
 
         # Precio madera desde DetalleOrdenCompra
         orig_dets = db.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra.in_(cands)).all() if cands else []
@@ -186,15 +219,17 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
         servicios_m3 = 0.0
         if guia.detalles:
             tiene_cepillado = False
-            dp_in = float(matched_dp.volumen_m3_entrada or 0) if matched_dp else 0.0
-            dp_out = float(matched_dp.volumen_m3_salida or 0) if matched_dp else 0.0
-            if matched_dp:
-                e_in = float(matched_dp.espesor_entrada or 0)
-                a_in = float(matched_dp.ancho_entrada or 0)
-                e_out = float(matched_dp.espesor_salida or 0)
-                a_out = float(matched_dp.ancho_salida or 0)
-                if (e_in > e_out + 0.5) or (a_in > a_out + 0.5):
-                    tiene_cepillado = True
+            dp_in = sum_dp_in
+            dp_out = sum_dp_out
+            if matched_dps:
+                for dp_item in matched_dps:
+                    e_in = float(dp_item.espesor_entrada or 0)
+                    a_in = float(dp_item.ancho_entrada or 0)
+                    e_out = float(dp_item.espesor_salida or 0)
+                    a_out = float(dp_item.ancho_salida or 0)
+                    if (e_in > e_out + 0.5) or (a_in > a_out + 0.5):
+                        tiene_cepillado = True
+                        break
             elif matched_b and matched_b.get("in", 0) > 0:
                 tiene_cepillado = True
 
@@ -203,7 +238,8 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
             for d in guia.detalles:
                 s_name = str(d.servicio or "").upper()
                 if "TROZAD" in s_name:
-                    trozado_det = d
+                    if not trozado_det or float(d.volumen_m3 or 0) > 0:
+                        trozado_det = d
                 elif "CEPILLAD" in s_name:
                     cepillado_det = d
 
@@ -233,6 +269,7 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
         total_vol_2da += vol_rg
 
         resumen_costos[rg.id_resumen_general] = {
+            "oc_tabla": oc_str or None,
             "costo_madera_m3": costo_madera_m3,
             "servicios_m3": servicios_m3,
             "costo_final_unitario": costo_unit,
@@ -244,8 +281,9 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
     # Fallback si no hay filas 2da en resumen general pero sí volumen de 2da en la guía
     if not rows_2da:
         v_fallback = float(guia.flejes_2da or 0)
-        if v_fallback <= 0 and guia.stock_planta:
-            v_fallback = sum(float(sp.volumen_m3 or 0) for sp in guia.stock_planta if _is_2da_stock(sp.tipo_stock))
+        eff_sp_2da = _get_effective_2da_stock_planta(guia)
+        if v_fallback <= 0 and eff_sp_2da:
+            v_fallback = sum(float(sp.volumen_m3 or 0) for sp in eff_sp_2da)
         if v_fallback > 0:
             cands = []
             if guia.oc_compra_ref:
@@ -297,49 +335,52 @@ def _format_guia_segunda(guia: GuiaCostoServicio, db: Optional[Session] = None) 
     costo_promedio_m3 = costos_info["costo_promedio_m3"]
 
     stock_2da_items: List[ItemStockSegunda] = []
-    if guia.stock_planta:
-        for sp in guia.stock_planta:
-            if _is_2da_stock(sp.tipo_stock):
-                sp_vol = float(sp.volumen_m3) if sp.volumen_m3 is not None else 0.0
-                vol_2da_stock = sum(float(s.volumen_m3 or 0) for s in guia.stock_planta if _is_2da_stock(s.tipo_stock))
-                costo_mad = round(total_costo_madera / vol_2da_stock, 2) if vol_2da_stock > 0 else None
-                costo_serv = round(total_servicios / vol_2da_stock, 2) if vol_2da_stock > 0 else None
-                c_unit = costo_promedio_m3 if costo_promedio_m3 > 0 else None
-                c_tot = round(sp_vol * costo_promedio_m3, 2) if costo_promedio_m3 > 0 else None
+    eff_stock_2da = _get_effective_2da_stock_planta(guia)
+    if eff_stock_2da:
+        vol_2da_stock = sum(float(s.volumen_m3 or 0) for s in eff_stock_2da)
+        for sp in eff_stock_2da:
+            sp_vol = float(sp.volumen_m3) if sp.volumen_m3 is not None else 0.0
+            costo_mad = round(total_costo_madera / vol_2da_stock, 2) if vol_2da_stock > 0 else None
+            costo_serv = round(total_servicios / vol_2da_stock, 2) if vol_2da_stock > 0 else None
+            c_unit = costo_promedio_m3 if costo_promedio_m3 > 0 else None
+            c_tot = round(sp_vol * costo_promedio_m3, 2) if costo_promedio_m3 > 0 else None
 
-                stock_2da_items.append(
-                    ItemStockSegunda(
-                        id_stock_planta=sp.id_stock_planta,
-                        id_guia_costo_servicio=guia.id_guia_costo_servicio,
-                        numero_guia=guia.numero_guia,
-                        fecha_despacho=guia.fecha_despacho,
-                        origen=guia.origen,
-                        destino=guia.destino,
-                        producto=guia.producto,
-                        oc_compra_ref=guia.oc_compra_ref,
-                        espesor=float(sp.espesor) if sp.espesor is not None else None,
-                        ancho=float(sp.ancho) if sp.ancho is not None else None,
-                        largo=float(sp.largo) if sp.largo is not None else None,
-                        piezas=sp.piezas,
-                        volumen_m3=sp_vol,
-                        tipo_stock=sp.tipo_stock or "2da",
-                        costo_madera_m3=costo_mad,
-                        servicios_m3=costo_serv,
-                        costo_final_unitario=c_unit,
-                        costo_final_total=c_tot,
-                    )
+            stock_2da_items.append(
+                ItemStockSegunda(
+                    id_stock_planta=sp.id_stock_planta,
+                    id_guia_costo_servicio=guia.id_guia_costo_servicio,
+                    numero_guia=guia.numero_guia,
+                    fecha_despacho=guia.fecha_despacho,
+                    origen=guia.origen,
+                    destino=guia.destino,
+                    producto=guia.producto,
+                    oc_compra_ref=guia.oc_compra_ref,
+                    espesor=float(sp.espesor) if sp.espesor is not None else None,
+                    ancho=float(sp.ancho) if sp.ancho is not None else None,
+                    largo=float(sp.largo) if sp.largo is not None else None,
+                    piezas=sp.piezas,
+                    volumen_m3=sp_vol,
+                    tipo_stock="2da",
+                    costo_madera_m3=costo_mad,
+                    servicios_m3=costo_serv,
+                    costo_final_unitario=c_unit,
+                    costo_final_total=c_tot,
                 )
+            )
 
     resumen_2da_items = []
     if guia.resumen_general:
+        last_oc_tabla = None
         for rg in guia.resumen_general:
+            if rg.oc_tabla and str(rg.oc_tabla).strip():
+                last_oc_tabla = str(rg.oc_tabla).strip()
             if _is_2da_movimiento(rg.movimiento):
                 c_dict = resumen_costos.get(rg.id_resumen_general, {})
                 resumen_2da_items.append(
                     {
                         "id_resumen_general": rg.id_resumen_general,
                         "id_guia_costo_servicio": guia.id_guia_costo_servicio,
-                        "oc_tabla": rg.oc_tabla,
+                        "oc_tabla": rg.oc_tabla or c_dict.get("oc_tabla") or last_oc_tabla,
                         "movimiento": rg.movimiento,
                         "volumen_m3": float(rg.volumen_m3) if rg.volumen_m3 is not None else None,
                         "estado": rg.estado,

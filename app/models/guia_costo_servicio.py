@@ -94,7 +94,39 @@ class GuiaCostoServicio(Base):
         prod_term_list = [p.to_dict() for p in self.productos_terminados] if self.productos_terminados else []
         proceso_list = [pr.to_dict() for pr in self.detalles_proceso] if self.detalles_proceso else []
         resumen_list = [r.to_dict() for r in self.resumen_general] if self.resumen_general else []
+        last_oc_tabla = None
+        for r_item in resumen_list:
+            oc_val = str(r_item.get("oc_tabla") or "").strip()
+            if oc_val:
+                last_oc_tabla = oc_val
+            elif last_oc_tabla:
+                r_item["oc_tabla"] = last_oc_tabla
+
         stock_list = [s.to_dict() for s in self.stock_planta] if self.stock_planta else []
+        if stock_list:
+            has_2da = any(
+                any(k in str(s.get("tipo_stock") or "").upper() for k in ["2DA", "2ERA", "2°", "2"])
+                for s in stock_list
+            )
+            if not has_2da:
+                sum_sp = sum(float(s.get("volumen_m3") or 0) for s in stock_list)
+                f2da_hdr = float(self.flejes_2da or 0)
+                t_m3_hdr = float(self.total_m3 or 0)
+                sum_rg_2da = sum(
+                    float(r.get("volumen_m3") or 0)
+                    for r in resumen_list
+                    if any(k in str(r.get("movimiento") or "").upper() for k in ["2DA", "2ERA", "2°"])
+                )
+                is_actually_2da = False
+                if f2da_hdr > 0 and abs(sum_sp - f2da_hdr) < 0.5:
+                    is_actually_2da = True
+                elif sum_rg_2da > 0 and abs(sum_sp - sum_rg_2da) < 0.5:
+                    is_actually_2da = True
+                elif t_m3_hdr > 0 and abs(sum_sp - t_m3_hdr) > 0.5:
+                    is_actually_2da = True
+                if is_actually_2da:
+                    for s in stock_list:
+                        s["tipo_stock"] = "2da"
 
         os_ids = [os.id_orden_servicio for os in self.ordenes_servicio] if self.ordenes_servicio else []
         oc_ids = [oc.id_orden_compra for oc in self.ordenes_compra] if self.ordenes_compra else []

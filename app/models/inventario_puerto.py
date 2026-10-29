@@ -283,6 +283,16 @@ class InventarioPuerto(Base):
                 if rg.movimiento and any(k in rg.movimiento.upper() for k in ["2DA", "2ERA", "2°", "FLEJES 2DA", "FLEJES 2ERA"])
             ) if gcs.resumen_general else 0.0
 
+            # En el nuevo formato Excel el cuadro único de Stock Planta corresponde a 2da
+            sp_all_is_2da = False
+            if sum_sp_2da <= 0 and gcs.stock_planta:
+                sum_sp_all = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta)
+                f2da_hdr = float(gcs.flejes_2da or 0)
+                t_m3_hdr = float(gcs.total_m3 or 0)
+                if (f2da_hdr > 0 and abs(sum_sp_all - f2da_hdr) < 0.5) or (sum_rg_2da > 0 and abs(sum_sp_all - sum_rg_2da) < 0.5) or (t_m3_hdr > 0 and abs(sum_sp_all - t_m3_hdr) > 0.5):
+                    sum_sp_2da = sum_sp_all
+                    sp_all_is_2da = True
+
             if sum_sp_2da > 0:
                 vol_2da_tot = sum_sp_2da
             elif sum_rg_2da > 0:
@@ -292,7 +302,7 @@ class InventarioPuerto(Base):
 
             # Para 1ra: total_m3 de cabecera o fallback a stock_planta / resumen_general
             vol_1ra_tot = float(gcs.total_m3 or 0)
-            if vol_1ra_tot <= 0 and gcs.stock_planta:
+            if vol_1ra_tot <= 0 and gcs.stock_planta and not sp_all_is_2da:
                 vol_1ra_tot = sum(float(sp.volumen_m3 or 0) for sp in gcs.stock_planta if sp.tipo_stock and any(k in sp.tipo_stock.upper() for k in ["1RA", "1ERA", "1°", "1", "TERMINADO"]))
             if vol_1ra_tot <= 0 and gcs.resumen_general:
                 vol_1ra_tot = sum(
@@ -337,22 +347,27 @@ class InventarioPuerto(Base):
             oc_raw = str(self.oc_compra or self.oc or "")
             matched_b = None
             matched_dp = None
+            matched_dps = []
 
             if gcs.detalles_proceso and candidate_oc_ids:
                 is_sd = "SD" in oc_raw.upper()
                 is_bs = "BS" in oc_raw.upper()
+                exact_dps = []
+                fallback_dps = []
                 for dp in gcs.detalles_proceso:
                     dp_oc = str(dp.oc_compra_entrada or "")
                     if any(str(cid) in dp_oc for cid in candidate_oc_ids):
                         dp_sd = "SD" in dp_oc.upper()
                         dp_bs = "BS" in dp_oc.upper()
                         if (is_sd and dp_sd) or (is_bs and dp_bs) or (not is_sd and not is_bs and not dp_sd and not dp_bs):
-                            matched_dp = dp
-                            break
-                        elif not matched_dp:
-                            matched_dp = dp
-                if not matched_dp and len(gcs.detalles_proceso) == 1:
-                    matched_dp = gcs.detalles_proceso[0]
+                            exact_dps.append(dp)
+                        else:
+                            fallback_dps.append(dp)
+                matched_dps = exact_dps if exact_dps else fallback_dps
+                if not matched_dps and len(gcs.detalles_proceso) == 1:
+                    matched_dps = [gcs.detalles_proceso[0]]
+                if matched_dps:
+                    matched_dp = matched_dps[0]
 
             if rg_blocks and candidate_oc_ids:
                 is_sd = "SD" in oc_raw.upper()
@@ -366,6 +381,9 @@ class InventarioPuerto(Base):
                             matched_b = b
                             break
 
+            dp_sum_in = sum(float(d.volumen_m3_entrada or 0) for d in matched_dps) if matched_dps else 0.0
+            dp_sum_out = sum(float(d.volumen_m3_salida or 0) for d in matched_dps) if matched_dps else 0.0
+
             if matched_b and (matched_b["1ra"] + matched_b["2da"]) > 0:
                 if matched_b["in"] > 0:
                     vol_in = matched_b["in"]
@@ -374,9 +392,7 @@ class InventarioPuerto(Base):
                     vol_out_2da = matched_b["2da"]
                 else:
                     # Madera viene ya cepillada (sin entrada rústica registrada en resumen_general)
-                    dp_vol_cand = float(matched_dp.volumen_m3_entrada or 0) if matched_dp else 0.0
-                    if dp_vol_cand <= 0 and matched_dp and matched_dp.volumen_m3_salida:
-                        dp_vol_cand = float(matched_dp.volumen_m3_salida)
+                    dp_vol_cand = dp_sum_in if dp_sum_in > 0 else dp_sum_out
 
                     sum_salida = matched_b["1ra"] + matched_b["2da"]
                     if dp_vol_cand > 0 and sum_salida > 0:
@@ -392,17 +408,16 @@ class InventarioPuerto(Base):
                         vol_out_2da = matched_b["2da"]
             else:
                 # Match en detalles_proceso de GCS
-                if matched_dp and matched_dp.volumen_m3_entrada:
-                    vol_in = float(matched_dp.volumen_m3_entrada)
-                    if len(gcs.detalles_proceso) == 1 and total_vol_salida_gcs > 0:
+                if dp_sum_in > 0:
+                    vol_in = dp_sum_in
+                    if len(gcs.detalles_proceso) == len(matched_dps) and total_vol_salida_gcs > 0:
                         vol_out = total_vol_salida_gcs
-                    elif matched_dp.volumen_m3_salida:
-                        dp_out_raw = float(matched_dp.volumen_m3_salida)
+                    elif dp_sum_out > 0:
                         sum_dp_out = sum(float(dp.volumen_m3_salida or 0) for dp in gcs.detalles_proceso)
                         if sum_dp_out > 0 and total_vol_salida_gcs > 0:
-                            vol_out = (dp_out_raw / sum_dp_out) * total_vol_salida_gcs
+                            vol_out = (dp_sum_out / sum_dp_out) * total_vol_salida_gcs
                         else:
-                            vol_out = dp_out_raw
+                            vol_out = dp_sum_out
                 elif total_vol_salida_gcs > 0:
                     vol_out = total_vol_salida_gcs
 
@@ -417,15 +432,17 @@ class InventarioPuerto(Base):
         # 3.1 Servicios Planta ($/m3) diferenciados por sub-lote / proceso
         if gcs and gcs.detalles:
             tiene_cepillado = False
-            dp_in = float(matched_dp.volumen_m3_entrada or 0) if matched_dp else 0.0
-            dp_out = float(matched_dp.volumen_m3_salida or 0) if matched_dp else 0.0
-            if matched_dp:
-                e_in = float(matched_dp.espesor_entrada or 0)
-                a_in = float(matched_dp.ancho_entrada or 0)
-                e_out = float(matched_dp.espesor_salida or 0)
-                a_out = float(matched_dp.ancho_salida or 0)
-                if (e_in > e_out + 0.5) or (a_in > a_out + 0.5):
-                    tiene_cepillado = True
+            dp_in = sum(float(d.volumen_m3_entrada or 0) for d in matched_dps) if matched_dps else 0.0
+            dp_out = sum(float(d.volumen_m3_salida or 0) for d in matched_dps) if matched_dps else 0.0
+            if matched_dps:
+                for d_proc in matched_dps:
+                    e_in = float(d_proc.espesor_entrada or 0)
+                    a_in = float(d_proc.ancho_entrada or 0)
+                    e_out = float(d_proc.espesor_salida or 0)
+                    a_out = float(d_proc.ancho_salida or 0)
+                    if (e_in > e_out + 0.5) or (a_in > a_out + 0.5):
+                        tiene_cepillado = True
+                        break
             elif matched_b and matched_b.get("in", 0) > 0:
                 tiene_cepillado = True
 
@@ -438,7 +455,7 @@ class InventarioPuerto(Base):
                 if "TROZAD" in s_name:
                     if item_dim_str in s_name:
                         trozado_det = d
-                    elif not trozado_det and float(d.volumen_m3 or 0) > 0:
+                    elif float(d.volumen_m3 or 0) > 0 and (not trozado_det or float(trozado_det.volumen_m3 or 0) <= 0):
                         trozado_det = d
                     elif not trozado_det:
                         trozado_det = d
