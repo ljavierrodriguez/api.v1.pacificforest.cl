@@ -408,6 +408,7 @@ def recepcionar_orden_servicio(
                     esp = item_override.espesor if item_override.espesor is not None else d.espesor
                     anc = item_override.ancho if item_override.ancho is not None else d.ancho
                     lar = item_override.largo if item_override.largo is not None else d.largo
+                    txt = item_override.texto_abierto if item_override.texto_abierto is not None else d.texto_abierto
                     calc_subtotal = round(float(cant or vol_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((cant or vol_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
 
                     inv = InventarioPuerto(
