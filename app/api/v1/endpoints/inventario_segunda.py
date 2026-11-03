@@ -217,46 +217,65 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
 
         # Servicios Planta ajustados por rendimiento
         servicios_m3 = 0.0
-        if guia.detalles:
-            tiene_cepillado = False
-            dp_in = sum_dp_in
-            dp_out = sum_dp_out
+        if guia.detalles or guia.detalles_proceso:
+            explicit_proc_cost = 0.0
+            has_explicit_proc = False
             if matched_dps:
                 for dp_item in matched_dps:
-                    e_in = float(dp_item.espesor_entrada or 0)
-                    a_in = float(dp_item.ancho_entrada or 0)
-                    e_out = float(dp_item.espesor_salida or 0)
-                    a_out = float(dp_item.ancho_salida or 0)
-                    if (e_in > e_out + 0.5) or (a_in > a_out + 0.5):
-                        tiene_cepillado = True
-                        break
-            elif matched_b and matched_b.get("in", 0) > 0:
-                tiene_cepillado = True
+                    proc_u = str(dp_item.proceso or "").upper()
+                    if "CEPILLADO" in proc_u or "TROZADO" in proc_u:
+                        has_explicit_proc = True
+                        m_cep = re.search(r"CEPILLADO\s*\(\s*\$?([\d.,]+)\s*\)", proc_u)
+                        m_troz = re.search(r"TROZADO\s*\(\s*\$?([\d.,]+)\s*\)", proc_u)
+                        t_cep_dp = float(m_cep.group(1).replace(",", ".")) if m_cep else 0.0
+                        t_troz_dp = float(m_troz.group(1).replace(",", ".")) if m_troz else 0.0
+                        v_in_dp = float(dp_item.volumen_m3_entrada or 0) or vol_out
+                        v_out_dp = float(dp_item.volumen_m3_salida or 0) or v_in_dp
+                        explicit_proc_cost += (v_in_dp * t_cep_dp) + (v_out_dp * t_troz_dp)
 
-            trozado_det = None
-            cepillado_det = None
-            for d in guia.detalles:
-                s_name = str(d.servicio or "").upper()
-                if "TROZAD" in s_name:
-                    if not trozado_det or float(d.volumen_m3 or 0) > 0:
-                        trozado_det = d
-                elif "CEPILLAD" in s_name:
-                    cepillado_det = d
+            if has_explicit_proc and vol_out and vol_out > 0:
+                servicios_m3 = round(explicit_proc_cost / vol_out, 2)
+            elif guia.detalles:
+                tiene_cepillado = False
+                dp_in = sum_dp_in
+                dp_out = sum_dp_out
+                if matched_dps:
+                    for dp_item in matched_dps:
+                        e_in = float(dp_item.espesor_entrada or 0)
+                        a_in = float(dp_item.ancho_entrada or 0)
+                        e_out = float(dp_item.espesor_salida or 0)
+                        a_out = float(dp_item.ancho_salida or 0)
+                        if (e_in > e_out + 0.5) or (a_in > a_out + 0.5):
+                            tiene_cepillado = True
+                            break
+                elif matched_b and matched_b.get("in", 0) > 0:
+                    tiene_cepillado = True
 
-            serv_item = 0.0
-            if trozado_det and trozado_det.tarifa_usd_m3:
-                t_troz = float(trozado_det.tarifa_usd_m3)
-                v_troz_in = dp_out if tiene_cepillado else (dp_in or vol_out)
-                ratio_troz = (v_troz_in / vol_out) if (v_troz_in > 0 and vol_out > 0) else 1.0
-                serv_item += (t_troz * ratio_troz)
+                trozado_det = None
+                cepillado_det = None
+                for d in guia.detalles:
+                    s_name = str(d.servicio or "").upper()
+                    if "TROZAD" in s_name:
+                        if not trozado_det or float(d.volumen_m3 or 0) > 0:
+                            trozado_det = d
+                    elif "CEPILLAD" in s_name:
+                        if float(d.volumen_m3 or 0) > 0 or not cepillado_det:
+                            cepillado_det = d
 
-            if tiene_cepillado and cepillado_det and cepillado_det.tarifa_usd_m3:
-                t_cep = float(cepillado_det.tarifa_usd_m3)
-                v_cep_in = dp_in if dp_in > 0 else vol_out
-                ratio_cep = (v_cep_in / vol_out) if (v_cep_in > 0 and vol_out > 0) else 1.0
-                serv_item += (t_cep * ratio_cep)
+                serv_item = 0.0
+                if trozado_det and trozado_det.tarifa_usd_m3:
+                    t_troz = float(trozado_det.tarifa_usd_m3)
+                    v_troz_in = dp_out if tiene_cepillado else (dp_in or vol_out)
+                    ratio_troz = (v_troz_in / vol_out) if (v_troz_in > 0 and vol_out > 0) else 1.0
+                    serv_item += (t_troz * ratio_troz)
 
-            servicios_m3 = round(serv_item, 2)
+                if tiene_cepillado and cepillado_det and cepillado_det.tarifa_usd_m3:
+                    t_cep = float(cepillado_det.tarifa_usd_m3)
+                    v_cep_in = dp_in if dp_in > 0 else vol_out
+                    ratio_cep = (v_cep_in / vol_out) if (v_cep_in > 0 and vol_out > 0) else 1.0
+                    serv_item += (t_cep * ratio_cep)
+
+                servicios_m3 = round(serv_item, 2)
 
         costo_unit = round(costo_madera_m3 + servicios_m3, 2)
         costo_mad_tot = round(vol_rg * costo_madera_m3, 2)
