@@ -182,7 +182,7 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
         vol_out = 1.0
         if matched_b and (matched_b["1ra"] + matched_b["2da"]) > 0:
             if matched_b["in"] > 0:
-                vol_in = matched_b["in"]
+                vol_in = sum_dp_in if (sum_dp_in > 0 and abs(sum_dp_in - matched_b["in"]) < 0.05) else matched_b["in"]
                 vol_out = matched_b["1ra"] + matched_b["2da"]
             else:
                 dp_vol_cand = sum_dp_in if sum_dp_in > 0 else sum_dp_out

@@ -390,6 +390,13 @@ class InventarioPuerto(Base):
                         elif any(k in mov for k in ["TERMINADO", "1RA", "1ERA", "1°", "FLEJES"]):
                             curr_b["1ra"] += v
 
+            # Si el último bloque del resumen general quedó con 2da=0 (por corte de fila al cargar) pero el total 2da de la guía tiene remanente exacto, asignarlo
+            if rg_blocks and vol_2da_tot > 0:
+                sum_blocks_2da = sum(b["2da"] for b in rg_blocks)
+                rem_2da = round(vol_2da_tot - sum_blocks_2da, 4)
+                if rem_2da > 0.01 and rg_blocks[-1]["2da"] == 0 and rg_blocks[-1]["1ra"] > 0:
+                    rg_blocks[-1]["2da"] = rem_2da
+
             oc_raw = str(self.oc_compra or self.oc or "")
             matched_b = None
             matched_dp = None
@@ -432,7 +439,7 @@ class InventarioPuerto(Base):
 
             if matched_b and (matched_b["1ra"] + matched_b["2da"]) > 0:
                 if matched_b["in"] > 0:
-                    vol_in = matched_b["in"]
+                    vol_in = dp_sum_in if (dp_sum_in > 0 and abs(dp_sum_in - matched_b["in"]) < 0.05) else matched_b["in"]
                     vol_out = matched_b["1ra"] + matched_b["2da"]
                     vol_out_1ra = matched_b["1ra"]
                     vol_out_2da = matched_b["2da"]
