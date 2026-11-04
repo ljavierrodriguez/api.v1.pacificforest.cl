@@ -215,10 +215,11 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
 
         costo_madera_m3 = round((vol_in * costo_compra) / vol_out, 2) if vol_out > 0 else round(costo_compra, 2)
 
-        # Servicios Planta ajustados por rendimiento
+        # Servicios Planta (tarifa base directa sin factor de rendimiento)
         servicios_m3 = 0.0
         if guia.detalles or guia.detalles_proceso:
-            explicit_proc_cost = 0.0
+            explicit_proc_weighted = 0.0
+            explicit_proc_vol = 0.0
             has_explicit_proc = False
             if matched_dps:
                 for dp_item in matched_dps:
@@ -229,16 +230,14 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
                         m_troz = re.search(r"TROZADO\s*\(\s*\$?([\d.,]+)\s*\)", proc_u)
                         t_cep_dp = float(m_cep.group(1).replace(",", ".")) if m_cep else 0.0
                         t_troz_dp = float(m_troz.group(1).replace(",", ".")) if m_troz else 0.0
-                        v_in_dp = float(dp_item.volumen_m3_entrada or 0) or vol_out
-                        v_out_dp = float(dp_item.volumen_m3_salida or 0) or v_in_dp
-                        explicit_proc_cost += (v_in_dp * t_cep_dp) + (v_out_dp * t_troz_dp)
+                        w_dp = float(dp_item.volumen_m3_salida or dp_item.volumen_m3_entrada or 1.0)
+                        explicit_proc_weighted += w_dp * (t_cep_dp + t_troz_dp)
+                        explicit_proc_vol += w_dp
 
-            if has_explicit_proc and vol_out and vol_out > 0:
-                servicios_m3 = round(explicit_proc_cost / vol_out, 2)
+            if has_explicit_proc and explicit_proc_vol > 0:
+                servicios_m3 = round(explicit_proc_weighted / explicit_proc_vol, 2)
             elif guia.detalles:
                 tiene_cepillado = False
-                dp_in = sum_dp_in
-                dp_out = sum_dp_out
                 if matched_dps:
                     for dp_item in matched_dps:
                         e_in = float(dp_item.espesor_entrada or 0)
@@ -265,15 +264,11 @@ def _compute_costos_segunda(guia: GuiaCostoServicio, db: Optional[Session]) -> d
                 serv_item = 0.0
                 if trozado_det and trozado_det.tarifa_usd_m3:
                     t_troz = float(trozado_det.tarifa_usd_m3)
-                    v_troz_in = dp_out if tiene_cepillado else (dp_in or vol_out)
-                    ratio_troz = (v_troz_in / vol_out) if (v_troz_in > 0 and vol_out > 0) else 1.0
-                    serv_item += (t_troz * ratio_troz)
+                    serv_item += t_troz
 
                 if tiene_cepillado and cepillado_det and cepillado_det.tarifa_usd_m3:
                     t_cep = float(cepillado_det.tarifa_usd_m3)
-                    v_cep_in = dp_in if dp_in > 0 else vol_out
-                    ratio_cep = (v_cep_in / vol_out) if (v_cep_in > 0 and vol_out > 0) else 1.0
-                    serv_item += (t_cep * ratio_cep)
+                    serv_item += t_cep
 
                 servicios_m3 = round(serv_item, 2)
 

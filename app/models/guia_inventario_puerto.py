@@ -47,12 +47,67 @@ class GuiaInventarioPuerto(Base):
         return f"<GuiaInventarioPuerto {self.id_guia_inventario_puerto} - Guia {self.numero_guia}>"
 
     def to_dict(self):
-        bodega_nombre = getattr(self.Bodega, "nombre", None) if self.Bodega else None
+        from sqlalchemy.orm import object_session
+        sess = object_session(self)
+
+        bodega = self.__dict__.get("Bodega")
+        if not bodega and self.id_bodega and sess:
+            from app.models.bodega import Bodega
+            bodega = sess.get(Bodega, self.id_bodega)
+        elif not bodega:
+            bodega = self.Bodega
+        bodega_nombre = getattr(bodega, "nombre", None) if bodega else None
+
         proveedor_nombre = None
-        if self.OrdenServicio and getattr(self.OrdenServicio, "ClienteProveedor", None):
-            proveedor_nombre = getattr(self.OrdenServicio.ClienteProveedor, "razon_social", None)
-        elif self.OrdenCompra and getattr(self.OrdenCompra, "ClienteProveedor", None):
-            proveedor_nombre = getattr(self.OrdenCompra.ClienteProveedor, "razon_social", None)
+        os_rel = self.__dict__.get("OrdenServicio")
+        if not os_rel and self.id_orden_servicio and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_rel = sess.get(OrdenServicio, self.id_orden_servicio)
+        elif not os_rel:
+            os_rel = self.OrdenServicio
+
+        if os_rel and getattr(os_rel, "id_cliente_proveedor", None) and sess:
+            from app.models.cliente_proveedor import ClienteProveedor
+            cp = sess.get(ClienteProveedor, os_rel.id_cliente_proveedor)
+            if cp:
+                proveedor_nombre = getattr(cp, "razon_social", None)
+        elif os_rel and getattr(os_rel, "ClienteProveedor", None):
+            proveedor_nombre = getattr(os_rel.ClienteProveedor, "razon_social", None)
+        else:
+            oc_rel = self.__dict__.get("OrdenCompra")
+            if not oc_rel and self.id_orden_compra and sess:
+                from app.models.orden_compra import OrdenCompra
+                oc_rel = sess.get(OrdenCompra, self.id_orden_compra)
+            elif not oc_rel:
+                oc_rel = self.OrdenCompra
+            if oc_rel and getattr(oc_rel, "id_cliente_proveedor", None) and sess:
+                from app.models.cliente_proveedor import ClienteProveedor
+                cp = sess.get(ClienteProveedor, oc_rel.id_cliente_proveedor)
+                if cp:
+                    proveedor_nombre = getattr(cp, "razon_social", None)
+            elif oc_rel and getattr(oc_rel, "ClienteProveedor", None):
+                proveedor_nombre = getattr(oc_rel.ClienteProveedor, "razon_social", None)
+
+        if self.detalles and sess:
+            import re
+            from app.models.detalle_orden_compra import DetalleOrdenCompra
+            odc_dets_cache = sess.info.setdefault("_odc_dets_cache", {})
+            batch_cids = set()
+            for d_item in self.detalles:
+                d_item.__dict__["guia"] = self
+                if d_item.id_orden_compra:
+                    batch_cids.add(d_item.id_orden_compra)
+                for raw_oc in (d_item.oc_compra, d_item.oc, self.oc):
+                    if raw_oc:
+                        for n_s in re.findall(r"\d+", str(raw_oc)):
+                            batch_cids.add(int(n_s))
+            missing_cids = [cid for cid in batch_cids if cid not in odc_dets_cache]
+            if missing_cids:
+                fetched_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra.in_(missing_cids)).all()
+                for cid in missing_cids:
+                    odc_dets_cache[cid] = []
+                for fd in fetched_dets:
+                    odc_dets_cache.setdefault(fd.id_orden_compra, []).append(fd)
 
         detalles_list = [d.to_dict() for d in self.detalles] if self.detalles else []
         total_volumen = sum(d.get("volumen_eq") or d.get("volumen") or 0 for d in detalles_list)

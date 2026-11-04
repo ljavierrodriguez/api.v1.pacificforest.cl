@@ -164,8 +164,10 @@ def get_guias_inventario_puerto(
     total_pages = max(1, (total_items + page_size - 1) // page_size)
     skip = (page - 1) * page_size
 
+    from sqlalchemy.orm import selectinload
     items = (
-        query.order_by(desc(GuiaInventarioPuerto.id_guia_inventario_puerto))
+        query.options(selectinload(GuiaInventarioPuerto.detalles))
+        .order_by(desc(GuiaInventarioPuerto.id_guia_inventario_puerto))
         .offset(skip)
         .limit(page_size)
         .all()

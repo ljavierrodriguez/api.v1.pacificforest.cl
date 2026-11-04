@@ -94,13 +94,16 @@ class InventarioPuerto(Base):
         def _num(x):
             return float(x) if x is not None else None
 
-        prod = self.Producto
+        from sqlalchemy.orm import object_session, selectinload
+        sess = object_session(self)
+
+        prod = self.__dict__.get("Producto")
         if not prod and self.id_producto:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
             if sess:
                 from app.models.producto import Producto
                 prod = sess.get(Producto, self.id_producto)
+            else:
+                prod = self.Producto
 
         prod_nombre = None
         id_especie = None
@@ -108,49 +111,64 @@ class InventarioPuerto(Base):
             prod_nombre = getattr(prod, "nombre_producto_esp", None) or getattr(prod, "nombre", None) or getattr(prod, "nombre_producto_ing", None)
             id_especie = getattr(prod, "id_especie", None)
 
-        uv = self.UnidadVenta
+        uv = self.__dict__.get("UnidadVenta")
         if not uv and self.id_unidad_venta:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
             if sess:
                 from app.models.unidad_venta import UnidadVenta
                 uv = sess.get(UnidadVenta, self.id_unidad_venta)
+            else:
+                uv = self.UnidadVenta
 
         uv_nombre = getattr(uv, "nombre", None) if uv else None
 
-        bodega = self.Bodega
+        bodega = self.__dict__.get("Bodega")
         if not bodega and self.id_bodega:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
             if sess:
                 from app.models.bodega import Bodega
                 bodega = sess.get(Bodega, self.id_bodega)
+            else:
+                bodega = self.Bodega
 
         bodega_nombre = getattr(bodega, "nombre", None) if bodega else None
 
         proveedor_nombre = None
-        os = self.OrdenServicio
+        os = self.__dict__.get("OrdenServicio")
         if not os and self.id_orden_servicio:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
             if sess:
                 from app.models.orden_servicio import OrdenServicio
                 os = sess.get(OrdenServicio, self.id_orden_servicio)
+            else:
+                os = self.OrdenServicio
 
-        if os and getattr(os, "ClienteProveedor", None):
+        if os and getattr(os, "id_cliente_proveedor", None) and sess:
+            from app.models.cliente_proveedor import ClienteProveedor
+            cp = sess.get(ClienteProveedor, os.id_cliente_proveedor)
+            if cp:
+                proveedor_nombre = getattr(cp, "razon_social", None)
+        elif os and getattr(os, "ClienteProveedor", None):
             proveedor_nombre = getattr(os.ClienteProveedor, "razon_social", None)
         else:
-            odc = self.OrdenCompra
+            odc = self.__dict__.get("OrdenCompra")
             if not odc and self.id_orden_compra:
-                from sqlalchemy.orm import object_session
-                sess = object_session(self)
                 if sess:
                     from app.models.orden_compra import OrdenCompra
                     odc = sess.get(OrdenCompra, self.id_orden_compra)
-            if odc and getattr(odc, "ClienteProveedor", None):
+                else:
+                    odc = self.OrdenCompra
+            if odc and getattr(odc, "id_cliente_proveedor", None) and sess:
+                from app.models.cliente_proveedor import ClienteProveedor
+                cp = sess.get(ClienteProveedor, odc.id_cliente_proveedor)
+                if cp:
+                    proveedor_nombre = getattr(cp, "razon_social", None)
+            elif odc and getattr(odc, "ClienteProveedor", None):
                 proveedor_nombre = getattr(odc.ClienteProveedor, "razon_social", None)
 
-        g = self.guia
+        g = self.__dict__.get("guia")
+        if not g and self.id_guia_inventario_puerto and sess:
+            from app.models.guia_inventario_puerto import GuiaInventarioPuerto
+            g = sess.get(GuiaInventarioPuerto, self.id_guia_inventario_puerto)
+        elif not g:
+            g = self.guia
         num_guia = self.numero_guia or (g.numero_guia if g else None)
         oc_val = self.oc or (g.oc if g else None)
         origen_val = self.origen or (g.origen if g else None)
@@ -160,9 +178,6 @@ class InventarioPuerto(Base):
         calc_pu = _num(self.precio_unitario)
         calc_peq = _num(self.precio_eq)
         calc_sub = _num(self.subtotal)
-
-        from sqlalchemy.orm import object_session
-        sess = object_session(self)
 
         def _parse_dim(v):
             if v is None:
@@ -209,10 +224,29 @@ class InventarioPuerto(Base):
                         if num_int not in candidate_oc_ids:
                             candidate_oc_ids.append(num_int)
 
+        orig_dets = []
+        if candidate_oc_ids and sess:
+            from app.models.detalle_orden_compra import DetalleOrdenCompra
+            odc_dets_cache = sess.info.setdefault("_odc_dets_cache", {})
+            missing_cids = [cid for cid in candidate_oc_ids if cid not in odc_dets_cache]
+            if missing_cids:
+                fetched_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra.in_(missing_cids)).all()
+                for cid in missing_cids:
+                    odc_dets_cache[cid] = []
+                for fd in fetched_dets:
+                    odc_dets_cache.setdefault(fd.id_orden_compra, []).append(fd)
+            for cid in candidate_oc_ids:
+                orig_dets.extend(odc_dets_cache.get(cid, []))
+
         d_match = None
         if self.id_detalle_odc and sess:
             from app.models.detalle_orden_compra import DetalleOrdenCompra
-            cand_det = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
+            cand_det = next((d for d in orig_dets if d.id_detalle_odc == self.id_detalle_odc), None)
+            if not cand_det:
+                det_id_cache = sess.info.setdefault("_det_odc_by_id", {})
+                if self.id_detalle_odc not in det_id_cache:
+                    det_id_cache[self.id_detalle_odc] = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
+                cand_det = det_id_cache[self.id_detalle_odc]
             if cand_det:
                 # Verificar que el detalle pertenezca a la OC origen correcta si existe candidate_oc_ids
                 if candidate_oc_ids and cand_det.id_orden_compra not in candidate_oc_ids:
@@ -222,10 +256,7 @@ class InventarioPuerto(Base):
                 else:
                     d_match = cand_det
 
-        if not d_match and candidate_oc_ids and sess:
-            from app.models.detalle_orden_compra import DetalleOrdenCompra
-            orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra.in_(candidate_oc_ids)).all()
-            if orig_dets:
+        if not d_match and orig_dets:
                 # First try matching product and dimensions
                 dim_matches = [d for d in orig_dets if _dim_eq(d.espesor, self.espesor) and _dim_eq(d.ancho, self.ancho) and _dim_eq(d.largo, self.largo)]
                 
@@ -271,7 +302,22 @@ class InventarioPuerto(Base):
 
         if num_guia and sess:
             from app.models.guia_costo_servicio import GuiaCostoServicio
-            gcs = sess.query(GuiaCostoServicio).filter(GuiaCostoServicio.numero_guia == str(num_guia).strip()).first()
+            gcs_key = str(num_guia).strip()
+            gcs_cache = sess.info.setdefault("_gcs_cache", {})
+            if gcs_key not in gcs_cache:
+                gcs_cache[gcs_key] = (
+                    sess.query(GuiaCostoServicio)
+                    .options(
+                        selectinload(GuiaCostoServicio.stock_planta),
+                        selectinload(GuiaCostoServicio.resumen_general),
+                        selectinload(GuiaCostoServicio.detalles),
+                        selectinload(GuiaCostoServicio.detalles_proceso),
+                        selectinload(GuiaCostoServicio.ordenes_servicio),
+                    )
+                    .filter(GuiaCostoServicio.numero_guia == gcs_key)
+                    .first()
+                )
+            gcs = gcs_cache[gcs_key]
 
         if gcs:
             # Calcular volumen total salida guia (flejes 1ra + flejes 2da)
@@ -429,9 +475,10 @@ class InventarioPuerto(Base):
         # 3. Costo Madera Ajustado ($/m3): ((volumen entrada * costo compra) / volumen salida)
         costo_madera_m3 = round((vol_in * costo_compra_m3) / vol_out, 2) if (vol_out and vol_out > 0) else round(costo_compra_m3, 2)
 
-        # 3.1 Servicios Planta ($/m3) diferenciados por sub-lote / proceso
+        # 3.1 Servicios Planta ($/m3) diferenciados por sub-lote / proceso (tarifa base directa sin factor de rendimiento)
         if gcs and (gcs.detalles or gcs.detalles_proceso):
-            explicit_proc_cost = 0.0
+            explicit_proc_weighted = 0.0
+            explicit_proc_vol = 0.0
             has_explicit_proc = False
             if matched_dps:
                 for d_proc in matched_dps:
@@ -442,16 +489,14 @@ class InventarioPuerto(Base):
                         m_troz = re.search(r"TROZADO\s*\(\s*\$?([\d.,]+)\s*\)", proc_u)
                         t_cep_dp = float(m_cep.group(1).replace(",", ".")) if m_cep else 0.0
                         t_troz_dp = float(m_troz.group(1).replace(",", ".")) if m_troz else 0.0
-                        v_in_dp = float(d_proc.volumen_m3_entrada or 0) or vol_out
-                        v_out_dp = float(d_proc.volumen_m3_salida or 0) or v_in_dp
-                        explicit_proc_cost += (v_in_dp * t_cep_dp) + (v_out_dp * t_troz_dp)
+                        w_dp = float(d_proc.volumen_m3_salida or d_proc.volumen_m3_entrada or 1.0)
+                        explicit_proc_weighted += w_dp * (t_cep_dp + t_troz_dp)
+                        explicit_proc_vol += w_dp
 
-            if has_explicit_proc and vol_out and vol_out > 0:
-                servicios_m3 = round(explicit_proc_cost / vol_out, 2)
+            if has_explicit_proc and explicit_proc_vol > 0:
+                servicios_m3 = round(explicit_proc_weighted / explicit_proc_vol, 2)
             elif gcs.detalles:
                 tiene_cepillado = False
-                dp_in = sum(float(d.volumen_m3_entrada or 0) for d in matched_dps) if matched_dps else 0.0
-                dp_out = sum(float(d.volumen_m3_salida or 0) for d in matched_dps) if matched_dps else 0.0
                 if matched_dps:
                     for d_proc in matched_dps:
                         e_in = float(d_proc.espesor_entrada or 0)
@@ -482,19 +527,15 @@ class InventarioPuerto(Base):
                             cepillado_det = d
 
                 serv_item = 0.0
-                # Trozado ajustado por factor de rendimiento a salida final
+                # Tarifa directa de Trozado (sin multiplicar por factor de rendimiento)
                 if trozado_det and trozado_det.tarifa_usd_m3:
                     t_troz = float(trozado_det.tarifa_usd_m3)
-                    v_troz_in = dp_out if tiene_cepillado else (dp_in or vol_out)
-                    ratio_troz = (v_troz_in / vol_out) if (v_troz_in > 0 and vol_out > 0) else 1.0
-                    serv_item += (t_troz * ratio_troz)
+                    serv_item += t_troz
 
-                # Cepillado ajustado por factor de rendimiento a salida final
+                # Tarifa directa de Cepillado (sin multiplicar por factor de rendimiento)
                 if tiene_cepillado and cepillado_det and cepillado_det.tarifa_usd_m3:
                     t_cep = float(cepillado_det.tarifa_usd_m3)
-                    v_cep_in = dp_in if dp_in > 0 else vol_out
-                    ratio_cep = (v_cep_in / vol_out) if (v_cep_in > 0 and vol_out > 0) else 1.0
-                    serv_item += (t_cep * ratio_cep)
+                    serv_item += t_cep
 
                 if serv_item > 0:
                     servicios_m3 = round(serv_item, 2)
@@ -509,10 +550,16 @@ class InventarioPuerto(Base):
             os_obj = gcs.ordenes_servicio[0]
         if not os_obj and self.id_orden_compra and sess:
             from app.models.orden_servicio import OrdenServicio
-            os_obj = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == self.id_orden_compra).first()
+            os_by_oc_cache = sess.info.setdefault("_os_by_oc_cache", {})
+            if self.id_orden_compra not in os_by_oc_cache:
+                os_by_oc_cache[self.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == self.id_orden_compra).first()
+            os_obj = os_by_oc_cache[self.id_orden_compra]
         if not os_obj and g and g.id_orden_compra and sess:
             from app.models.orden_servicio import OrdenServicio
-            os_obj = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == g.id_orden_compra).first()
+            os_by_oc_cache = sess.info.setdefault("_os_by_oc_cache", {})
+            if g.id_orden_compra not in os_by_oc_cache:
+                os_by_oc_cache[g.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == g.id_orden_compra).first()
+            os_obj = os_by_oc_cache[g.id_orden_compra]
 
         flete_m3 = 0.0
         tiene_os = False

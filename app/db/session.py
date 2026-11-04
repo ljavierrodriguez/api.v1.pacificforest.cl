@@ -4,7 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 # Base de datos 1
-engine_db = create_engine(settings.DATABASE_URL_DB)
+engine_db = create_engine(
+    settings.DATABASE_URL_DB,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 SessionLocalDB = sessionmaker(autocommit=False, autoflush=False, bind=engine_db)
 
 # Crear una función que proporcione una sesión para DB1
