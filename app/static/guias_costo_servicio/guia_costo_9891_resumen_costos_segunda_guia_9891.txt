@@ -1,0 +1,142 @@
+============================================================================================
+RESUMEN Y ORIGEN DETALLADO DE MONTOS - INVENTARIO DE SEGUNDA (GUÍA #9891)
+PACIFIC FOREST INTERNACIONAL
+============================================================================================
+
+FÓRMULA GENERAL DE COSTO FINAL (SEGUNDA CALIDAD):
+  1. Costo Madera Ajustado ($/m³) = [ (Volumen Entrada * Costo Compra Base) / Volumen Salida Total ]
+     * La merma de cepillado y trozado en planta es absorbida proporcionalmente por toda la madera útil.
+  2. Costo Servicios ($/m³)       = Tarifa Base Directa según proceso real (Sin multiplicar por merma)
+     * Cepillado + Trozado = $70.00 USD/m³ ($32 + $38)
+     * Solo Trozado        = $38.00 USD/m³ (Madera que ya venía cepillada de origen)
+  3. Costo Final Unitario ($/m³)  = Costo Madera Ajustado + Costo Servicios
+  4. Total Valorizado Segunda ($) = Volumen 2da (m³) * Costo Final Unitario ($/m³)
+
+--------------------------------------------------------------------------------------------
+DATOS GENERALES DE LA GUÍA (SEGUNDA EN PLANTA):
+--------------------------------------------------------------------------------------------
+- N° Guía de Costo Servicio: #9891
+- Fecha de Despacho:         2026-09-16
+- Origen / Planta:           SYO
+- Destino:                   Sitrans - Talcahuano
+- Producto Principal:        Flejes 20x67
+- Referencia OC Compra:      8160-8083
+- Volumen Total 2da Calidad: 7.7000 m³
+- Total Piezas de Segunda:   4.420 piezas
+- Paquetes en Stock Planta:  1 paquetes
+
+
+============================================================================================
+1. COSTO DE MADERA (SEGUNDA): $2,225.72 USD (Ponderado: $289.05 / m³)
+============================================================================================
+El costo de madera se computa por cada sub-lote / Orden de Compra de origen,
+absorbiendo la merma del rendimiento total (1ra + 2da):
+
+--------------------------------------------------------------------------------------------
+A) Sub-lote JCE OC 8008 (BS) (1.0000 m³ de 2da):
+   * Movimiento:              Flejes 2da
+   * Estado / Ubicación:      Planta
+   * Costo Madera Ajustado:   $261.17 / m³
+   * Subtotal Madera 2da:     1.0000 m³ * $261.17 / m³ = $261.17 USD
+
+--------------------------------------------------------------------------------------------
+B) Sub-lote JCE OC 8008 (SD) (0.7000 m³ de 2da):
+   * Movimiento:              Flejes 2da
+   * Estado / Ubicación:      Planta
+   * Costo Madera Ajustado:   $275.45 / m³
+   * Subtotal Madera 2da:     0.7000 m³ * $275.45 / m³ = $192.81 USD
+
+--------------------------------------------------------------------------------------------
+C) Sub-lote Tabla OC 8057 (6.0000 m³ de 2da):
+   * Movimiento:              Flejes 2da
+   * Estado / Ubicación:      Planta
+   * Costo Madera Ajustado:   $295.29 / m³
+   * Subtotal Madera 2da:     6.0000 m³ * $295.29 / m³ = $1,771.74 USD
+
+--------------------------------------------------------------------------------------------
+TOTAL CONSOLIDADO MADERA DE SEGUNDA:
+  + Subtotal JCE OC 8008 (BS)        : $    261.17 USD  ($261.17 / m³)
+  + Subtotal JCE OC 8008 (SD)        : $    192.81 USD  ($275.45 / m³)
+  + Subtotal Tabla OC 8057           : $  1,771.74 USD  ($295.29 / m³)
+  ------------------------------------------------------
+  = TOTAL MADERA 2DA:      $  2,225.72 USD (para los 7.7000 m³)
+
+
+============================================================================================
+2. SERVICIOS DE PLANTA (SEGUNDA): $347.00 USD (Ponderado: $45.06 / m³)
+============================================================================================
+Tarifa base directa según el proceso físico realizado en planta sobre el sub-lote:
+
+--------------------------------------------------------------------------------------------
+A) Sub-lote JCE OC 8008 (BS) (1.0000 m³):
+   * Proceso Realizado:       Cepillado ($32) + Trozado ($38)
+   * Tarifa Servicio:         $70.00 / m³ (Tarifa Base Directa)
+   * Subtotal Servicios 2da:  1.0000 m³ * $70.00 / m³ = $70.00 USD
+
+--------------------------------------------------------------------------------------------
+B) Sub-lote JCE OC 8008 (SD) (0.7000 m³):
+   * Proceso Realizado:       Cepillado ($32) + Trozado ($38)
+   * Tarifa Servicio:         $70.00 / m³ (Tarifa Base Directa)
+   * Subtotal Servicios 2da:  0.7000 m³ * $70.00 / m³ = $49.00 USD
+
+--------------------------------------------------------------------------------------------
+C) Sub-lote Tabla OC 8057 (6.0000 m³):
+   * Proceso Realizado:       Solo Trozado ($38) [Madera cepillada de origen]
+   * Tarifa Servicio:         $38.00 / m³ (Tarifa Base Directa)
+   * Subtotal Servicios 2da:  6.0000 m³ * $38.00 / m³ = $228.00 USD
+
+--------------------------------------------------------------------------------------------
+TOTAL CONSOLIDADO SERVICIOS DE SEGUNDA:
+  + Subtotal JCE OC 8008 (BS)        : $     70.00 USD  ($70.00 / m³)
+  + Subtotal JCE OC 8008 (SD)        : $     49.00 USD  ($70.00 / m³)
+  + Subtotal Tabla OC 8057           : $    228.00 USD  ($38.00 / m³)
+  ------------------------------------------------------
+  = TOTAL SERVICIOS 2DA:   $    347.00 USD (para los 7.7000 m³)
+
+
+============================================================================================
+3. COSTO FINAL TOTAL SEGUNDA: $2,572.72 USD ($334.12 / m³)
+============================================================================================
+A. Sumatoria de Costos Unitarios Ponderados por m³:
+   + Costo Madera Ponderado:   $  289.05 / m³
+   + Costo Servicios Planta:   $   45.06 / m³
+   -----------------------------------
+   = COSTO FINAL PROMEDIO 2DA: $  334.12 / m³
+
+B. Sumatoria de Montos Totales:
+   + Madera Total Segunda:     $  2,225.72 USD
+   + Servicios Total Segunda:  $    347.00 USD
+   -----------------------------------
+   = COSTO VALORIZADO SEGUNDA: $  2,572.72 USD (para 7.7000 m³)
+
+
+============================================================================================
+4. DETALLE POR PAQUETE / ESCUADRÍA EN STOCK PLANTA 2DA (1 REGISTROS):
+============================================================================================
+N°   | Dimensiones (mm)     |   Piezas |   Vol (m³) |   Madera $/m³ |   Serv $/m³ |   Final $/m³ |      Total USD
+------------------------------------------------------------------------------------------------------------
+1    | 20 x 67 x 1300       |    4.420 |     7.7000 |        289.05 |       45.06 |       334.12 |       2,572.72
+------------------------------------------------------------------------------------------------------------
+TOTAL | STOCK PLANTA 2DA     |    4.420 |     7.7000 |        289.05 |       45.06 |       334.12 |       2,572.72
+
+
+============================================================================================
+5. AUDITORÍA DE RENDIMIENTO: ENTRADA A CEPILLADO / SALIDA A TROZADO (3 LÍNEAS):
+============================================================================================
+OC Entrada           | Entrada (E x A x L)    | Vol In (m³) | Salida (E x A x L)     | Vol Out (m³) | Proceso / Tarifa            
+--------------------------------------------------------------------------------------------------------------------------------
+JCE OC 8008 (BS)     | 24.0x75.0x4000.0       |     16.5600 | 20.0x67.0x4000.0       |      12.3280 | Cepillado ($32) | Trozado ($
+JCE OC 8008 (SD)     | 24.0x75.0x4000.0       |     14.9760 | 20.0x67.0x4000.0       |      11.1488 | Cepillado ($32) | Trozado ($
+Tabla OC 8057        | 20.0x67.0x4000.0       |     39.0208 | 20.0x67.0x4000.0       |      39.0208 | Cepillado (NO) | Trozado ($3
+--------------------------------------------------------------------------------------------------------------------------------
+
+============================================================================================
+6. SERVICIOS FACTURADOS EN ESTA GUÍA DE COSTO:
+============================================================================================
+- Servicio cepillado            :    31.5400 m³  x  $ 32.00 USD/m³  =  $  1,009.28 USD
+- Servicio trozado 20x67        :    62.5000 m³  x  $ 38.00 USD/m³  =  $  2,375.00 USD
+
+============================================================================================
+Documento generado automáticamente el: 05-11-2026, 4:09:52 p. m.
+Módulo de Inventario de Segunda - Pacific Forest Internacional
+============================================================================================
