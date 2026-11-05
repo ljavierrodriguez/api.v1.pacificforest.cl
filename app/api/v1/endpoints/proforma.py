@@ -612,6 +612,10 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
     for d in detalles:
         producto = getattr(d, "Producto", None)
         especie = getattr(producto, "especie", None) if producto else None
+        uv = getattr(d, "UnidadVenta", None)
+        um_esp = getattr(d, "UnidadMedidaEspesor", None)
+        um_anc = getattr(d, "UnidadMedidaAncho", None)
+        um_lar = getattr(d, "UnidadMedidaLargo", None)
         detalles_payload.append({
             "id_detalle_proforma": d.id_detalle_proforma,
             "id_producto": d.id_producto,
@@ -623,13 +627,17 @@ def get_proforma(item_id: int, db: Session = Depends(get_db)):
             ),
             "texto_libre": d.texto_libre,
             "id_unidad_venta": d.id_unidad_venta,
+            "unidad_venta_nombre": getattr(uv, "nombre", None),
             "cantidad": d.cantidad,
             "espesor": d.espesor,
             "id_unidad_medida_espesor": d.id_unidad_medida_espesor,
+            "unidad_medida_espesor_nombre": getattr(um_esp, "nombre", None),
             "ancho": d.ancho,
             "id_unidad_medida_ancho": d.id_unidad_medida_ancho,
+            "unidad_medida_ancho_nombre": getattr(um_anc, "nombre", None),
             "largo": d.largo,
             "id_unidad_medida_largo": d.id_unidad_medida_largo,
+            "unidad_medida_largo_nombre": getattr(um_lar, "nombre", None),
             "piezas": d.piezas,
             "precio_unitario": d.precio_unitario,
             "subtotal": d.subtotal,

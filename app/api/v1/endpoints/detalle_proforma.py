@@ -19,18 +19,26 @@ router = APIRouter(prefix="/detalle_proforma", tags=["detalle_proforma"])
 
 def _build_detalle_response(detalle: DetalleProforma) -> dict:
     """Helper function to build response with producto data"""
+    uv = getattr(detalle, "UnidadVenta", None)
+    um_esp = getattr(detalle, "UnidadMedidaEspesor", None)
+    um_anc = getattr(detalle, "UnidadMedidaAncho", None)
+    um_lar = getattr(detalle, "UnidadMedidaLargo", None)
     response_data = {
         "id_detalle_proforma": detalle.id_detalle_proforma,
         "id_proforma": detalle.id_proforma,
         "id_producto": detalle.id_producto,
         "id_unidad_venta": detalle.id_unidad_venta,
+        "unidad_venta_nombre": getattr(uv, "nombre", None),
         "texto_libre": detalle.texto_libre,
         "espesor": detalle.espesor,
         "id_unidad_medida_espesor": detalle.id_unidad_medida_espesor,
+        "unidad_medida_espesor_nombre": getattr(um_esp, "nombre", None),
         "ancho": detalle.ancho,
         "id_unidad_medida_ancho": detalle.id_unidad_medida_ancho,
+        "unidad_medida_ancho_nombre": getattr(um_anc, "nombre", None),
         "largo": detalle.largo,
         "id_unidad_medida_largo": detalle.id_unidad_medida_largo,
+        "unidad_medida_largo_nombre": getattr(um_lar, "nombre", None),
         "piezas": detalle.piezas,
         "cantidad": detalle.cantidad,
         "precio_unitario": detalle.precio_unitario,
