@@ -89,8 +89,11 @@ def get_inventario_transitorio(
     total_pages = max(1, (total_items + page_size - 1) // page_size)
     skip = (page - 1) * page_size
 
+    from sqlalchemy.orm import selectinload
+
     items = (
-        query.order_by(desc(InventarioTransitorio.id_inventario_transitorio))
+        query.options(selectinload(InventarioTransitorio.guia))
+        .order_by(desc(InventarioTransitorio.id_inventario_transitorio))
         .offset(skip)
         .limit(page_size)
         .all()
@@ -163,8 +166,11 @@ def get_guias_inventario_transitorio(
     total_pages = max(1, (total_items + page_size - 1) // page_size)
     skip = (page - 1) * page_size
 
+    from sqlalchemy.orm import selectinload
+
     items = (
-        query.order_by(desc(GuiaInventarioTransitorio.id_guia_inventario_transitorio))
+        query.options(selectinload(GuiaInventarioTransitorio.detalles))
+        .order_by(desc(GuiaInventarioTransitorio.id_guia_inventario_transitorio))
         .offset(skip)
         .limit(page_size)
         .all()

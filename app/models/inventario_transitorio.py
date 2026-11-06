@@ -83,13 +83,18 @@ class InventarioTransitorio(Base):
         def _num(x):
             return float(x) if x is not None else None
 
-        prod = self.Producto
-        if not prod and self.id_producto:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
+        from sqlalchemy.orm import object_session
+        sess = object_session(self)
+
+        prod = None
+        if self.id_producto:
             if sess:
-                from app.models.producto import Producto
-                prod = sess.get(Producto, self.id_producto)
+                if "_prod_cache" not in sess.info:
+                    from app.models.producto import Producto
+                    sess.info["_prod_cache"] = {p.id_producto: p for p in sess.query(Producto).all()}
+                prod = sess.info["_prod_cache"].get(self.id_producto)
+            if not prod:
+                prod = self.Producto
 
         prod_nombre = None
         id_especie = None
@@ -97,34 +102,44 @@ class InventarioTransitorio(Base):
             prod_nombre = getattr(prod, "nombre_producto_esp", None) or getattr(prod, "nombre", None) or getattr(prod, "nombre_producto_ing", None)
             id_especie = getattr(prod, "id_especie", None)
 
-        uv = self.UnidadVenta
-        if not uv and self.id_unidad_venta:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
+        uv = None
+        if self.id_unidad_venta:
             if sess:
-                from app.models.unidad_venta import UnidadVenta
-                uv = sess.get(UnidadVenta, self.id_unidad_venta)
+                if "_uv_cache" not in sess.info:
+                    from app.models.unidad_venta import UnidadVenta
+                    sess.info["_uv_cache"] = {u.id_unidad_venta: u for u in sess.query(UnidadVenta).all()}
+                uv = sess.info["_uv_cache"].get(self.id_unidad_venta)
+            if not uv:
+                uv = self.UnidadVenta
 
         uv_nombre = getattr(uv, "nombre", None) if uv else None
 
-        bodega = self.Bodega
-        if not bodega and self.id_bodega:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
+        bodega = None
+        if self.id_bodega:
             if sess:
-                from app.models.bodega import Bodega
-                bodega = sess.get(Bodega, self.id_bodega)
+                if "_bodega_cache" not in sess.info:
+                    from app.models.bodega import Bodega
+                    sess.info["_bodega_cache"] = {b.id_bodega: b for b in sess.query(Bodega).all()}
+                bodega = sess.info["_bodega_cache"].get(self.id_bodega)
+            if not bodega:
+                bodega = self.Bodega
 
         bodega_nombre = getattr(bodega, "nombre", None) if bodega else None
 
         proveedor_nombre = None
-        oc = self.OrdenCompra
-        if not oc and self.id_orden_compra:
-            from sqlalchemy.orm import object_session
-            sess = object_session(self)
+        oc = None
+        if self.id_orden_compra:
             if sess:
-                from app.models.orden_compra import OrdenCompra
-                oc = sess.get(OrdenCompra, self.id_orden_compra)
+                if "_oc_cache" not in sess.info:
+                    from app.models.orden_compra import OrdenCompra
+                    from sqlalchemy.orm import joinedload
+                    sess.info["_oc_cache"] = {
+                        o.id_orden_compra: o
+                        for o in sess.query(OrdenCompra).options(joinedload(OrdenCompra.ClienteProveedor)).all()
+                    }
+                oc = sess.info["_oc_cache"].get(self.id_orden_compra)
+            if not oc:
+                oc = self.OrdenCompra
 
         if oc and getattr(oc, "ClienteProveedor", None):
             proveedor_nombre = getattr(oc.ClienteProveedor, "razon_social", None)
@@ -163,9 +178,6 @@ class InventarioTransitorio(Base):
                 return abs(p1 - p2) < 0.01
             return str(p1).strip().lower() == str(p2).strip().lower()
 
-        from sqlalchemy.orm import object_session
-        sess = object_session(self)
-
         import re
         candidate_oc_ids = []
         # Prioridad 1: OC de compra de origen directa (oc_compra)
@@ -186,10 +198,20 @@ class InventarioTransitorio(Base):
                         if num_int not in candidate_oc_ids:
                             candidate_oc_ids.append(num_int)
 
+        if sess and "_det_oc_by_id" not in sess.info:
+            from app.models.detalle_orden_compra import DetalleOrdenCompra
+            all_det_oc = sess.query(DetalleOrdenCompra).all()
+            by_id = {}
+            by_oc = {}
+            for d_oc in all_det_oc:
+                by_id[d_oc.id_detalle_odc] = d_oc
+                by_oc.setdefault(d_oc.id_orden_compra, []).append(d_oc)
+            sess.info["_det_oc_by_id"] = by_id
+            sess.info["_det_oc_by_oc"] = by_oc
+
         d_match = None
         if getattr(self, "id_detalle_odc", None) and sess:
-            from app.models.detalle_orden_compra import DetalleOrdenCompra
-            cand_det = sess.get(DetalleOrdenCompra, self.id_detalle_odc)
+            cand_det = sess.info["_det_oc_by_id"].get(self.id_detalle_odc)
             if cand_det:
                 if candidate_oc_ids and cand_det.id_orden_compra not in candidate_oc_ids:
                     d_match = None
@@ -199,8 +221,9 @@ class InventarioTransitorio(Base):
                     d_match = cand_det
 
         if not d_match and candidate_oc_ids and sess:
-            from app.models.detalle_orden_compra import DetalleOrdenCompra
-            orig_dets = sess.query(DetalleOrdenCompra).filter(DetalleOrdenCompra.id_orden_compra.in_(candidate_oc_ids)).all()
+            orig_dets = []
+            for cid in candidate_oc_ids:
+                orig_dets.extend(sess.info["_det_oc_by_oc"].get(cid, []))
             if orig_dets:
                 dim_matches = [d for d in orig_dets if _dim_eq(d.espesor, self.espesor) and _dim_eq(d.ancho, self.ancho) and _dim_eq(d.largo, self.largo)]
                 raw_str = f"{getattr(self, 'oc_compra', '') or ''} {getattr(self, 'numero_proforma', '') or ''}".upper()

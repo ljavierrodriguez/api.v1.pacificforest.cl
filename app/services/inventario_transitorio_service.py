@@ -11,6 +11,18 @@ from app.models.detalle_orden_servicio import DetalleOrdenServicio
 from app.models.orden_compra import OrdenCompra
 
 
+def _safe_float(v) -> Optional[float]:
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        return float(s.replace(",", "."))
+    except Exception:
+        return None
+
+
 def _dim_eq(v1, v2) -> bool:
     if v1 is None or v2 is None:
         return False
@@ -26,10 +38,19 @@ def get_all_service_entrances(db: Session) -> List[Dict[str, Any]]:
     1. Guías de Costo de Servicio (detalles_proceso y resumen_general)
     2. Órdenes de Servicio (detalle_orden_servicio)
     """
+    from sqlalchemy.orm import selectinload
+
     entrances: List[Dict[str, Any]] = []
 
-    # 1. Guías de Costo de Servicio
-    guias_cs = db.query(GuiaCostoServicio).all()
+    # 1. Guías de Costo de Servicio (con eager loading para evitar N+1 en BD remota)
+    guias_cs = (
+        db.query(GuiaCostoServicio)
+        .options(
+            selectinload(GuiaCostoServicio.detalles_proceso),
+            selectinload(GuiaCostoServicio.resumen_general),
+        )
+        .all()
+    )
     for g in guias_cs:
         has_dp = False
         if g.detalles_proceso:
@@ -67,9 +88,9 @@ def get_all_service_entrances(db: Session) -> List[Dict[str, Any]]:
                         "destino": g.destino,
                         "target_oc_ids": target_ocs,
                         "raw_oc": dp.oc_compra_entrada or g.oc_compra_ref,
-                        "espesor": float(dp.espesor_entrada) if dp.espesor_entrada is not None else None,
-                        "ancho": float(dp.ancho_entrada) if dp.ancho_entrada is not None else None,
-                        "largo": float(dp.largo_entrada) if dp.largo_entrada is not None else None,
+                        "espesor": _safe_float(dp.espesor_entrada),
+                        "ancho": _safe_float(dp.ancho_entrada),
+                        "largo": _safe_float(dp.largo_entrada),
                         "piezas": pzs_in,
                         "volumen": vol_in,
                     })
@@ -116,31 +137,34 @@ def get_all_service_entrances(db: Session) -> List[Dict[str, Any]]:
                             "volumen": vol_in,
                         })
 
-    # 2. Órdenes de Servicio
-    ordenes_servicio = db.query(OrdenServicio).all()
-    for os_obj in ordenes_servicio:
-        if os_obj.id_orden_compra and os_obj.DetalleOrdenServicio:
-            for dos in os_obj.DetalleOrdenServicio:
-                vol_dos = float(dos.volumen_eq or dos.volumen or dos.cantidad or 0)
-                pzs_dos = float(dos.piezas or 0)
-                if vol_dos > 0 or pzs_dos > 0:
-                    entrances.append({
-                        "id_guia_servicio": None,
-                        "id_orden_servicio": os_obj.id_orden_servicio,
-                        "numero_guia_servicio": f"OS-{os_obj.id_orden_servicio}",
-                        "fecha": os_obj.fecha_emision,
-                        "tipo": "ORDEN_SERVICIO",
-                        "proceso": os_obj.servicio or "Orden de Servicio",
-                        "origen": None,
-                        "destino": os_obj.destino,
-                        "target_oc_ids": [os_obj.id_orden_compra],
-                        "raw_oc": f"OC-{os_obj.id_orden_compra}",
-                        "espesor": float(dos.espesor) if dos.espesor else None,
-                        "ancho": float(dos.ancho) if dos.ancho else None,
-                        "largo": float(dos.largo) if dos.largo else None,
-                        "piezas": pzs_dos,
-                        "volumen": vol_dos,
-                    })
+    # 2. Órdenes de Servicio (consulta única con JOIN para evitar N+1 de lazy="dynamic")
+    dos_rows = (
+        db.query(DetalleOrdenServicio, OrdenServicio)
+        .join(OrdenServicio, DetalleOrdenServicio.id_orden_servicio == OrdenServicio.id_orden_servicio)
+        .filter(OrdenServicio.id_orden_compra.isnot(None))
+        .all()
+    )
+    for dos, os_obj in dos_rows:
+        vol_dos = float(dos.volumen_eq or dos.volumen or dos.cantidad or 0)
+        pzs_dos = float(getattr(dos, "piezas", None) or 0)
+        if vol_dos > 0 or pzs_dos > 0:
+            entrances.append({
+                "id_guia_servicio": None,
+                "id_orden_servicio": os_obj.id_orden_servicio,
+                "numero_guia_servicio": f"OS-{os_obj.id_orden_servicio}",
+                "fecha": os_obj.fecha_emision,
+                "tipo": "ORDEN_SERVICIO",
+                "proceso": os_obj.servicio or "Orden de Servicio",
+                "origen": None,
+                "destino": os_obj.destino,
+                "target_oc_ids": [os_obj.id_orden_compra],
+                "raw_oc": f"OC-{os_obj.id_orden_compra}",
+                "espesor": _safe_float(dos.espesor),
+                "ancho": _safe_float(dos.ancho),
+                "largo": _safe_float(dos.largo),
+                "piezas": pzs_dos,
+                "volumen": vol_dos,
+            })
 
     return entrances
 
@@ -371,9 +395,11 @@ def get_transitorio_consumo_resumen(db: Session, id_bodega: Optional[int] = None
     - Desglose detallado por Orden de Compra (OC)
     - Desglose por Bodega y por Producto
     """
+    from sqlalchemy.orm import selectinload
+
     consumo_map = calculate_transitorio_consumo_map(db)
 
-    q = db.query(InventarioTransitorio)
+    q = db.query(InventarioTransitorio).options(selectinload(InventarioTransitorio.guia))
     if id_bodega:
         q = q.filter(InventarioTransitorio.id_bodega == id_bodega)
     items = q.all()
@@ -401,27 +427,28 @@ def get_transitorio_consumo_resumen(db: Session, id_bodega: Optional[int] = None
     total_costo_utilizado = round(total_costo_producto * ratio_utilizado, 2)
     total_costo_saldo = round(max(0.0, total_costo_producto - total_costo_utilizado), 2)
 
-    # Fletes
+    # Fletes (consultas agrupadas para evitar N+1 en BD remota)
     from app.models.guia_costo_servicio import GuiaCostoServicio
     os_ids = set()
-    for t in items:
-        if t.id_orden_compra:
-            linked_os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == t.id_orden_compra).all()
-            for los in linked_os:
-                os_ids.add(los.id_orden_servicio)
+    oc_ids_set = {t.id_orden_compra for t in items if t.id_orden_compra}
+    if oc_ids_set:
+        linked_os = db.query(OrdenServicio).filter(OrdenServicio.id_orden_compra.in_(oc_ids_set)).all()
+        for los in linked_os:
+            os_ids.add(los.id_orden_servicio)
 
     guias_numeros = {t.numero_guia for t in items if t.numero_guia}
-    for gnum in guias_numeros:
-        gcs = db.query(GuiaCostoServicio).filter(GuiaCostoServicio.numero_guia == gnum).first()
-        if gcs:
+    if guias_numeros:
+        gcs_list = db.query(GuiaCostoServicio).filter(GuiaCostoServicio.numero_guia.in_(guias_numeros)).all()
+        for gcs in gcs_list:
             for los in gcs.ordenes_servicio:
                 os_ids.add(los.id_orden_servicio)
 
     total_flete = 0.0
-    for os_id in os_ids:
-        os_rec = db.query(OrdenServicio).filter(OrdenServicio.id_orden_servicio == os_id).first()
-        if os_rec and os_rec.flete:
-            total_flete += float(os_rec.flete)
+    if os_ids:
+        os_records = db.query(OrdenServicio).filter(OrdenServicio.id_orden_servicio.in_(os_ids)).all()
+        for os_rec in os_records:
+            if os_rec and os_rec.flete:
+                total_flete += float(os_rec.flete)
     total_flete = round(total_flete, 2)
     total_costo = round(total_costo_producto + total_flete, 2)
 

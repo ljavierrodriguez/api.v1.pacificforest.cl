@@ -40,10 +40,36 @@ class GuiaInventarioTransitorio(Base):
         return f"<GuiaInventarioTransitorio {self.id_guia_inventario_transitorio} - Guia {self.numero_guia}>"
 
     def to_dict(self):
-        bodega_nombre = getattr(self.Bodega, "nombre", None) if self.Bodega else None
+        from sqlalchemy.orm import object_session
+        sess = object_session(self)
+
+        bodega = None
+        if self.id_bodega:
+            if sess:
+                if "_bodega_cache" not in sess.info:
+                    from app.models.bodega import Bodega
+                    sess.info["_bodega_cache"] = {b.id_bodega: b for b in sess.query(Bodega).all()}
+                bodega = sess.info["_bodega_cache"].get(self.id_bodega)
+            if not bodega:
+                bodega = self.Bodega
+        bodega_nombre = getattr(bodega, "nombre", None) if bodega else None
+
         proveedor_nombre = None
-        if self.OrdenCompra and getattr(self.OrdenCompra, "ClienteProveedor", None):
-            proveedor_nombre = getattr(self.OrdenCompra.ClienteProveedor, "razon_social", None)
+        oc = None
+        if self.id_orden_compra:
+            if sess:
+                if "_oc_cache" not in sess.info:
+                    from app.models.orden_compra import OrdenCompra
+                    from sqlalchemy.orm import joinedload
+                    sess.info["_oc_cache"] = {
+                        o.id_orden_compra: o
+                        for o in sess.query(OrdenCompra).options(joinedload(OrdenCompra.ClienteProveedor)).all()
+                    }
+                oc = sess.info["_oc_cache"].get(self.id_orden_compra)
+            if not oc:
+                oc = self.OrdenCompra
+        if oc and getattr(oc, "ClienteProveedor", None):
+            proveedor_nombre = getattr(oc.ClienteProveedor, "razon_social", None)
 
         detalles_list = [d.to_dict() for d in self.detalles] if self.detalles else []
         total_volumen = sum(d.get("volumen_eq") or d.get("volumen") or 0 for d in detalles_list)
