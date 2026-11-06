@@ -38,6 +38,18 @@ class InventarioPuerto(Base):
     precio_eq = Column(Numeric(12, 3), nullable=True)
     piezas = Column(Numeric(12, 3), nullable=True)
 
+    espesor_entrada = Column(String(20), nullable=True)
+    ancho_entrada = Column(String(20), nullable=True)
+    largo_entrada = Column(String(20), nullable=True)
+    piezas_entrada = Column(Numeric(12, 3), nullable=True)
+    volumen_entrada = Column(Numeric(12, 3), nullable=True)
+
+    espesor_real = Column(String(20), nullable=True)
+    ancho_real = Column(String(20), nullable=True)
+    largo_real = Column(String(20), nullable=True)
+    piezas_real = Column(Numeric(12, 3), nullable=True)
+    volumen_real = Column(Numeric(12, 3), nullable=True)
+
     fecha_recepcion = Column(Date, default=date.today)
     numero_guia = Column(String(100), nullable=True)
     oc = Column(String(100), nullable=True)
@@ -568,6 +580,18 @@ class InventarioPuerto(Base):
                 os_by_oc_cache[g.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == g.id_orden_compra).first()
             os_obj = os_by_oc_cache[g.id_orden_compra]
 
+        esp_entrada = self.espesor_entrada if self.espesor_entrada is not None else self.espesor
+        anc_entrada = self.ancho_entrada if self.ancho_entrada is not None else self.ancho
+        lar_entrada = self.largo_entrada if self.largo_entrada is not None else self.largo
+        pzs_entrada = _num(self.piezas_entrada) if self.piezas_entrada is not None else _num(self.piezas)
+        vol_entrada = _num(self.volumen_entrada) if self.volumen_entrada is not None else (_num(self.volumen) or _num(self.volumen_eq))
+
+        esp_real = self.espesor_real if self.espesor_real is not None else self.espesor
+        anc_real = self.ancho_real if self.ancho_real is not None else self.ancho
+        lar_real = self.largo_real if self.largo_real is not None else self.largo
+        pzs_real = _num(self.piezas_real) if self.piezas_real is not None else _num(self.piezas)
+        vol_real = _num(self.volumen_real) if self.volumen_real is not None else (_num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0.0)
+
         flete_m3 = 0.0
         tiene_os = False
         id_os_linked = self.id_orden_servicio
@@ -576,26 +600,158 @@ class InventarioPuerto(Base):
             id_os_linked = os_obj.id_orden_servicio
             if os_obj.flete:
                 flete_total = float(os_obj.flete)
-                # El flete de transporte corresponde a la carga trasladada a puerto en la guía
+                # El flete de transporte corresponde a la carga real trasladada a puerto en la guía
                 vol_transporte = 0.0
                 if g and g.detalles:
-                    vol_transporte = sum(float(it.volumen_eq or it.volumen or 0) for it in g.detalles)
+                    vol_transporte = sum(
+                        float(it.volumen_real if it.volumen_real is not None else (it.volumen_eq or it.volumen or 0))
+                        for it in g.detalles
+                    )
                 if vol_transporte <= 0 and vol_1ra_tot > 0:
                     vol_transporte = vol_1ra_tot
                 if vol_transporte <= 0:
-                    vol_transporte = _num(self.volumen_eq) or _num(self.volumen) or 1.0
+                    vol_transporte = vol_real or 1.0
 
                 flete_m3 = round(flete_total / vol_transporte, 2)
 
-        # 5. Costo Final (Unitario y Totales)
+        # 5. Costo Final (Unitario y Totales sobre el Volumen Real llegado a puerto)
         # Formula: ((cantidad volumen entrada x costo compra) / volumen salida) + servicios + flete
         costo_final_unitario = round(costo_madera_m3 + servicios_m3 + flete_m3, 2)
-        vol_item = _num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0.0
+        vol_item = vol_real or 0.0
         costo_final_total = round(vol_item * costo_final_unitario, 2)
         costo_madera_total = round(vol_item * costo_madera_m3, 2)
         costo_servicios_total = round(vol_item * servicios_m3, 2)
         costo_flete_total = round(vol_item * flete_m3, 2)
         calc_sub = costo_madera_total
+
+        # 6. Precio Venta Proforma y Rentabilidad / Utilidad Real en Puerto
+        id_proforma_venta = None
+        oe_numero = None
+        precio_venta_m3 = None
+        precio_venta_unitario = None
+        venta_total_usd = None
+        utilidad_m3 = None
+        utilidad_total = None
+        rentabilidad_pct = None
+        rentabilidad_costo_pct = None
+
+        if sess:
+            from app.models.orden_compra import OrdenCompra
+            from app.models.proforma import Proforma
+            from app.models.detalle_proforma import DetalleProforma
+
+            oc_obj_cache = sess.info.setdefault("_oc_obj_cache", {})
+            pf_obj_cache = sess.info.setdefault("_pf_obj_cache", {})
+            pf_by_oe_cache = sess.info.setdefault("_pf_by_oe_cache", {})
+            pf_dets_cache = sess.info.setdefault("_pf_dets_cache", {})
+
+            def _get_oc_obj(cid):
+                if not cid:
+                    return None
+                if cid not in oc_obj_cache:
+                    oc_obj_cache[cid] = sess.get(OrdenCompra, cid)
+                return oc_obj_cache[cid]
+
+            def _get_pf_obj(pid):
+                if not pid:
+                    return None
+                if pid not in pf_obj_cache:
+                    pf_obj_cache[pid] = sess.get(Proforma, pid)
+                return pf_obj_cache[pid]
+
+            def _get_pf_by_oe(oe_num):
+                if not oe_num:
+                    return None
+                if oe_num not in pf_by_oe_cache:
+                    pf_by_oe_cache[oe_num] = sess.query(Proforma).filter(Proforma.id_operacion_exportacion == oe_num).first()
+                return pf_by_oe_cache[oe_num]
+
+            pf_target = None
+            # A) Directo desde id_orden_compra de item, guía u OS
+            for direct_oc_id in [
+                self.id_orden_compra,
+                (g.id_orden_compra if g else None),
+                (os_obj.id_orden_compra if os_obj else None),
+            ]:
+                if direct_oc_id:
+                    oc_cand = _get_oc_obj(direct_oc_id)
+                    if oc_cand and oc_cand.id_proforma:
+                        pf_target = _get_pf_obj(oc_cand.id_proforma)
+                        if pf_target:
+                            break
+
+            # B) Desde los números en el campo oc (ej: "8160-8083" -> OE 8160 o OC 8083)
+            if not pf_target:
+                oc_nums = []
+                for raw_oc_str in [self.oc, (g.oc if g else None)]:
+                    if raw_oc_str:
+                        for ns in re.findall(r"\d+", str(raw_oc_str)):
+                            ni = int(ns)
+                            if ni not in oc_nums:
+                                oc_nums.append(ni)
+                for ni in oc_nums:
+                    oc_cand = _get_oc_obj(ni)
+                    if oc_cand and oc_cand.id_proforma:
+                        pf_target = _get_pf_obj(oc_cand.id_proforma)
+                        if pf_target:
+                            break
+                    pf_cand = _get_pf_by_oe(ni)
+                    if pf_cand:
+                        pf_target = pf_cand
+                        break
+                    pf_cand2 = _get_pf_obj(ni)
+                    if pf_cand2:
+                        pf_target = pf_cand2
+                        break
+
+            if pf_target:
+                id_proforma_venta = pf_target.id_proforma
+                oe_numero = pf_target.id_operacion_exportacion
+                if id_proforma_venta not in pf_dets_cache:
+                    pf_dets_cache[id_proforma_venta] = (
+                        sess.query(DetalleProforma)
+                        .filter(DetalleProforma.id_proforma == id_proforma_venta)
+                        .all()
+                    )
+                pf_dets = pf_dets_cache[id_proforma_venta]
+                dp_match = None
+                if pf_dets:
+                    exact_dp = [
+                        dp for dp in pf_dets
+                        if _dim_eq(dp.espesor, esp_real)
+                        and _dim_eq(dp.ancho, anc_real)
+                        and _dim_eq(dp.largo, lar_real)
+                    ]
+                    if exact_dp:
+                        dp_match = exact_dp[0]
+                    else:
+                        ea_dp = [
+                            dp for dp in pf_dets
+                            if _dim_eq(dp.espesor, esp_real) and _dim_eq(dp.ancho, anc_real)
+                        ]
+                        if ea_dp:
+                            dp_match = ea_dp[0]
+                        else:
+                            prod_dp = [dp for dp in pf_dets if self.id_producto and dp.id_producto == self.id_producto]
+                            dp_match = prod_dp[0] if prod_dp else pf_dets[0]
+
+                if dp_match:
+                    if dp_match.precio_eq is not None and float(dp_match.precio_eq) > 0:
+                        precio_venta_m3 = round(float(dp_match.precio_eq), 2)
+                    elif dp_match.subtotal and dp_match.volumen_eq and float(dp_match.volumen_eq) > 0:
+                        precio_venta_m3 = round(float(dp_match.subtotal) / float(dp_match.volumen_eq), 2)
+                    elif dp_match.precio_unitario is not None and float(dp_match.precio_unitario) > 0:
+                        precio_venta_m3 = round(float(dp_match.precio_unitario), 2)
+
+                    if dp_match.precio_unitario is not None and float(dp_match.precio_unitario) > 0:
+                        precio_venta_unitario = round(float(dp_match.precio_unitario), 4)
+
+        if precio_venta_m3 is not None and precio_venta_m3 > 0:
+            venta_total_usd = round(vol_item * precio_venta_m3, 2)
+            utilidad_m3 = round(precio_venta_m3 - costo_final_unitario, 2)
+            utilidad_total = round(venta_total_usd - costo_final_total, 2)
+            rentabilidad_pct = round((utilidad_total / venta_total_usd) * 100, 2) if venta_total_usd > 0 else 0.0
+            rentabilidad_costo_pct = round((utilidad_total / costo_final_total) * 100, 2) if costo_final_total > 0 else 0.0
 
         return {
             "id_inventario_puerto": self.id_inventario_puerto,
@@ -613,19 +769,29 @@ class InventarioPuerto(Base):
             "texto_abierto": self.texto_abierto,
             "id_unidad_venta": self.id_unidad_venta,
             "unidad_venta_nombre": uv_nombre,
-            "cantidad": _num(self.cantidad),
-            "espesor": self.espesor,
+            "cantidad": _num(self.cantidad) if self.cantidad is not None else vol_real,
+            "espesor": esp_real,
             "id_unidad_medida_espesor": self.id_unidad_medida_espesor,
-            "ancho": self.ancho,
+            "ancho": anc_real,
             "id_unidad_medida_ancho": self.id_unidad_medida_ancho,
-            "largo": self.largo,
+            "largo": lar_real,
             "id_unidad_medida_largo": self.id_unidad_medida_largo,
+            "espesor_entrada": esp_entrada,
+            "ancho_entrada": anc_entrada,
+            "largo_entrada": lar_entrada,
+            "piezas_entrada": pzs_entrada,
+            "volumen_entrada": vol_entrada,
+            "espesor_real": esp_real,
+            "ancho_real": anc_real,
+            "largo_real": lar_real,
+            "piezas_real": pzs_real,
+            "volumen_real": vol_real,
             "precio_unitario": calc_pu,
             "subtotal": calc_sub,
-            "volumen": _num(self.volumen),
-            "volumen_eq": _num(self.volumen_eq),
+            "volumen": vol_entrada if vol_entrada is not None else _num(self.volumen),
+            "volumen_eq": vol_real if vol_real is not None else _num(self.volumen_eq),
             "precio_eq": calc_peq,
-            "piezas": _num(self.piezas),
+            "piezas": pzs_real if pzs_real is not None else _num(self.piezas),
             "fecha_recepcion": fecha_rec.isoformat() if hasattr(fecha_rec, "isoformat") else fecha_rec,
             "numero_guia": num_guia,
             "oc": oc_val,
@@ -656,4 +822,13 @@ class InventarioPuerto(Base):
             "costo_servicios_total": costo_servicios_total,
             "costo_flete_total": costo_flete_total,
             "tiene_orden_servicio": tiene_os,
+            "id_proforma_venta": id_proforma_venta,
+            "oe_numero": oe_numero,
+            "precio_venta_m3": precio_venta_m3,
+            "precio_venta_unitario": precio_venta_unitario,
+            "venta_total_usd": venta_total_usd,
+            "utilidad_m3": utilidad_m3,
+            "utilidad_total": utilidad_total,
+            "rentabilidad_pct": rentabilidad_pct,
+            "rentabilidad_costo_pct": rentabilidad_costo_pct,
         }

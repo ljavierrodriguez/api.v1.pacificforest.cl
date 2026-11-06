@@ -110,8 +110,13 @@ class GuiaInventarioPuerto(Base):
                     odc_dets_cache.setdefault(fd.id_orden_compra, []).append(fd)
 
         detalles_list = [d.to_dict() for d in self.detalles] if self.detalles else []
-        total_volumen = sum(d.get("volumen_eq") or d.get("volumen") or 0 for d in detalles_list)
-        total_piezas = sum(d.get("piezas") or 0 for d in detalles_list)
+        total_volumen_entrada = sum(d.get("volumen_entrada") or d.get("volumen") or d.get("volumen_eq") or 0 for d in detalles_list)
+        total_piezas_entrada = sum(d.get("piezas_entrada") or d.get("piezas") or 0 for d in detalles_list)
+        total_volumen_real = sum(d.get("volumen_real") or d.get("volumen_eq") or d.get("volumen") or 0 for d in detalles_list)
+        total_piezas_real = sum(d.get("piezas_real") or d.get("piezas") or 0 for d in detalles_list)
+
+        total_volumen = total_volumen_real
+        total_piezas = total_piezas_real
         total_paquetes = sum(d.get("numero_paquetes") or 0 for d in detalles_list)
 
         total_costo_madera = sum(d.get("costo_madera_total") or d.get("subtotal") or 0 for d in detalles_list)
@@ -141,7 +146,7 @@ class GuiaInventarioPuerto(Base):
             if detalles_list and total_volumen > 0:
                 cur_sum = 0.0
                 for d in detalles_list:
-                    it_vol = float(d.get("volumen_eq") or d.get("volumen") or 0.0)
+                    it_vol = float(d.get("volumen_real") or d.get("volumen_eq") or d.get("volumen") or 0.0)
                     it_flete = round((it_vol / total_volumen) * total_flete, 2)
                     d["costo_flete_total"] = it_flete
                     cur_sum += it_flete
@@ -152,12 +157,31 @@ class GuiaInventarioPuerto(Base):
                     d["flete_m3"] = flete_m3
                     d["costo_final_unitario"] = round(float(d.get("costo_madera_m3") or 0) + float(d.get("servicios_m3") or 0) + flete_m3, 2)
                     d["costo_final_total"] = round(float(d.get("costo_madera_total") or 0) + float(d.get("costo_servicios_total") or 0) + float(d.get("costo_flete_total") or 0), 2)
+                    pv_m3 = d.get("precio_venta_m3")
+                    if pv_m3 is not None and float(pv_m3) > 0:
+                        it_vol_r = float(d.get("volumen_real") or d.get("volumen_eq") or d.get("volumen") or 0.0)
+                        venta_tot = round(it_vol_r * float(pv_m3), 2)
+                        d["venta_total_usd"] = venta_tot
+                        d["utilidad_m3"] = round(float(pv_m3) - d["costo_final_unitario"], 2)
+                        d["utilidad_total"] = round(venta_tot - d["costo_final_total"], 2)
+                        d["rentabilidad_pct"] = round((d["utilidad_total"] / venta_tot) * 100, 2) if venta_tot > 0 else 0.0
+                        d["rentabilidad_costo_pct"] = round((d["utilidad_total"] / d["costo_final_total"]) * 100, 2) if d["costo_final_total"] > 0 else 0.0
 
         total_costo_final = sum(d.get("costo_final_total") or 0 for d in detalles_list)
         costo_final_promedio_m3 = round(total_costo_final / total_volumen, 2) if total_volumen > 0 else 0.0
         vol_salida_1ra_guia = detalles_list[0].get("volumen_salida_1ra_guia") if detalles_list else None
         vol_salida_2da_guia = detalles_list[0].get("volumen_salida_2da_guia") if detalles_list else None
         vol_total_salida_gcs = detalles_list[0].get("volumen_total_salida_gcs") if detalles_list else None
+
+        has_venta = any(d.get("venta_total_usd") is not None and float(d.get("venta_total_usd") or 0) > 0 for d in detalles_list)
+        total_venta_usd = round(sum(float(d.get("venta_total_usd") or 0) for d in detalles_list), 2) if has_venta else None
+        precio_venta_promedio_m3 = round(total_venta_usd / total_volumen, 2) if (has_venta and total_volumen > 0 and total_venta_usd is not None) else None
+        total_utilidad_usd = round(total_venta_usd - total_costo_final, 2) if (has_venta and total_venta_usd is not None) else None
+        utilidad_promedio_m3 = round(total_utilidad_usd / total_volumen, 2) if (has_venta and total_volumen > 0 and total_utilidad_usd is not None) else None
+        rentabilidad_pct = round((total_utilidad_usd / total_venta_usd) * 100, 2) if (has_venta and total_venta_usd and total_venta_usd > 0 and total_utilidad_usd is not None) else None
+        rentabilidad_costo_pct = round((total_utilidad_usd / total_costo_final) * 100, 2) if (has_venta and total_costo_final > 0 and total_utilidad_usd is not None) else None
+        id_proforma_venta = next((d.get("id_proforma_venta") for d in detalles_list if d.get("id_proforma_venta")), None)
+        oe_numero = next((d.get("oe_numero") for d in detalles_list if d.get("oe_numero")), None)
 
         return {
             "id_guia_inventario_puerto": self.id_guia_inventario_puerto,
@@ -175,6 +199,10 @@ class GuiaInventarioPuerto(Base):
             "estado": self.estado,
             "total_volumen": round(total_volumen, 3),
             "total_piezas": total_piezas,
+            "total_volumen_entrada": round(total_volumen_entrada, 3),
+            "total_piezas_entrada": total_piezas_entrada,
+            "total_volumen_real": round(total_volumen_real, 3),
+            "total_piezas_real": total_piezas_real,
             "total_paquetes": total_paquetes,
             "total_costo_madera": round(total_costo_madera, 2),
             "total_servicios": round(total_servicios, 2),
@@ -187,6 +215,14 @@ class GuiaInventarioPuerto(Base):
             "volumen_salida_1ra": vol_salida_1ra_guia,
             "volumen_salida_2da": vol_salida_2da_guia,
             "volumen_total_salida_gcs": vol_total_salida_gcs,
+            "id_proforma_venta": id_proforma_venta,
+            "oe_numero": oe_numero,
+            "precio_venta_promedio_m3": precio_venta_promedio_m3,
+            "total_venta_usd": total_venta_usd,
+            "total_utilidad_usd": total_utilidad_usd,
+            "utilidad_promedio_m3": utilidad_promedio_m3,
+            "rentabilidad_pct": rentabilidad_pct,
+            "rentabilidad_costo_pct": rentabilidad_costo_pct,
             "detalles": detalles_list,
         }
 

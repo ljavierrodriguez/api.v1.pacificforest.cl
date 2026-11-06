@@ -27,6 +27,16 @@ class InventarioPuertoBase(BaseModel):
     volumen_eq: Optional[Decimal] = None
     precio_eq: Optional[Decimal] = None
     piezas: Optional[Decimal] = None
+    espesor_entrada: Optional[str] = Field(None, max_length=20)
+    ancho_entrada: Optional[str] = Field(None, max_length=20)
+    largo_entrada: Optional[str] = Field(None, max_length=20)
+    piezas_entrada: Optional[Decimal] = None
+    volumen_entrada: Optional[Decimal] = None
+    espesor_real: Optional[str] = Field(None, max_length=20)
+    ancho_real: Optional[str] = Field(None, max_length=20)
+    largo_real: Optional[str] = Field(None, max_length=20)
+    piezas_real: Optional[Decimal] = None
+    volumen_real: Optional[Decimal] = None
     fecha_recepcion: Optional[date] = None
     numero_guia: Optional[str] = Field(None, max_length=100)
     oc: Optional[str] = Field(None, max_length=100)
@@ -66,6 +76,16 @@ class InventarioPuertoUpdate(BaseModel):
     volumen_eq: Optional[Decimal] = None
     precio_eq: Optional[Decimal] = None
     piezas: Optional[Decimal] = None
+    espesor_entrada: Optional[str] = Field(None, max_length=20)
+    ancho_entrada: Optional[str] = Field(None, max_length=20)
+    largo_entrada: Optional[str] = Field(None, max_length=20)
+    piezas_entrada: Optional[Decimal] = None
+    volumen_entrada: Optional[Decimal] = None
+    espesor_real: Optional[str] = Field(None, max_length=20)
+    ancho_real: Optional[str] = Field(None, max_length=20)
+    largo_real: Optional[str] = Field(None, max_length=20)
+    piezas_real: Optional[Decimal] = None
+    volumen_real: Optional[Decimal] = None
     fecha_recepcion: Optional[date] = None
     numero_guia: Optional[str] = None
     oc: Optional[str] = None
@@ -90,6 +110,16 @@ class RecepcionarItemOSPayload(BaseModel):
     piezas: Optional[Decimal] = None
     volumen: Optional[Decimal] = None
     volumen_eq: Optional[Decimal] = None
+    espesor_entrada: Optional[str] = None
+    ancho_entrada: Optional[str] = None
+    largo_entrada: Optional[str] = None
+    piezas_entrada: Optional[Decimal] = None
+    volumen_entrada: Optional[Decimal] = None
+    espesor_real: Optional[str] = None
+    ancho_real: Optional[str] = None
+    largo_real: Optional[str] = None
+    piezas_real: Optional[Decimal] = None
+    volumen_real: Optional[Decimal] = None
     id_bodega: Optional[int] = None
     numero_guia: Optional[str] = None
     oc: Optional[str] = None
@@ -154,6 +184,15 @@ class InventarioPuertoRead(InventarioPuertoBase):
     costo_servicios_total: Optional[float] = None
     costo_flete_total: Optional[float] = None
     tiene_orden_servicio: Optional[bool] = False
+    id_proforma_venta: Optional[int] = None
+    oe_numero: Optional[int] = None
+    precio_venta_m3: Optional[float] = None
+    precio_venta_unitario: Optional[float] = None
+    venta_total_usd: Optional[float] = None
+    utilidad_m3: Optional[float] = None
+    utilidad_total: Optional[float] = None
+    rentabilidad_pct: Optional[float] = None
+    rentabilidad_costo_pct: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -174,6 +213,10 @@ class GuiaInventarioPuertoRead(BaseModel):
     estado: Optional[str] = None
     total_volumen: Optional[float] = 0.0
     total_piezas: Optional[float] = 0.0
+    total_volumen_entrada: Optional[float] = 0.0
+    total_piezas_entrada: Optional[float] = 0.0
+    total_volumen_real: Optional[float] = 0.0
+    total_piezas_real: Optional[float] = 0.0
     total_paquetes: Optional[int] = 0
     total_costo_madera: Optional[float] = 0.0
     total_servicios: Optional[float] = 0.0
@@ -186,6 +229,14 @@ class GuiaInventarioPuertoRead(BaseModel):
     volumen_salida_1ra: Optional[float] = None
     volumen_salida_2da: Optional[float] = None
     volumen_total_salida_gcs: Optional[float] = None
+    id_proforma_venta: Optional[int] = None
+    oe_numero: Optional[int] = None
+    precio_venta_promedio_m3: Optional[float] = None
+    total_venta_usd: Optional[float] = None
+    total_utilidad_usd: Optional[float] = None
+    utilidad_promedio_m3: Optional[float] = None
+    rentabilidad_pct: Optional[float] = None
+    rentabilidad_costo_pct: Optional[float] = None
     detalles: List[InventarioPuertoRead] = []
 
     model_config = ConfigDict(from_attributes=True)

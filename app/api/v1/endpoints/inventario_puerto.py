@@ -204,15 +204,18 @@ def get_resumen_inventario_puerto(
     items = q.all()
 
     item_dicts = [p.to_dict() for p in items]
-    total_volumen = round(sum(d.get("volumen") or 0 for d in item_dicts), 3)
-    total_volumen_eq = round(sum(d.get("volumen_eq") or 0 for d in item_dicts), 3)
+    total_volumen = round(sum(d.get("volumen_entrada") or d.get("volumen") or 0 for d in item_dicts), 3)
+    total_volumen_eq = round(sum(d.get("volumen_real") or d.get("volumen_eq") or 0 for d in item_dicts), 3)
     total_costo_producto = round(sum(d.get("costo_madera_total") if d.get("costo_madera_total") is not None else (d.get("subtotal") or 0) for d in item_dicts), 2)
     total_costo_servicio = round(sum(d.get("costo_servicios_total") or 0 for d in item_dicts), 2)
     total_flete = round(sum(d.get("costo_flete_total") or 0 for d in item_dicts), 2)
     total_costo = round(sum(d.get("costo_final_total") if d.get("costo_final_total") is not None else ((d.get("subtotal") or 0) + (d.get("costo_servicios_total") or 0) + (d.get("costo_flete_total") or 0)) for d in item_dicts), 2)
+    total_venta_usd = round(sum(d.get("venta_total_usd") or 0 for d in item_dicts), 2)
+    total_utilidad_usd = round(total_venta_usd - total_costo, 2) if total_venta_usd > 0 else 0.0
+    rentabilidad_pct = round((total_utilidad_usd / total_venta_usd) * 100, 2) if total_venta_usd > 0 else 0.0
     total_items = len(item_dicts)
     total_paquetes = sum(d.get("numero_paquetes") or 1 for d in item_dicts)
-    total_piezas = round(sum(d.get("piezas") or 0 for d in item_dicts), 2)
+    total_piezas = round(sum(d.get("piezas_real") or d.get("piezas") or 0 for d in item_dicts), 2)
 
     # Breakdown by bodega
     bodega_groups = {}
@@ -297,6 +300,9 @@ def get_resumen_inventario_puerto(
         "total_costo_servicio": total_costo_servicio,
         "total_flete": total_flete,
         "total_costo": total_costo,
+        "total_venta_usd": total_venta_usd,
+        "total_utilidad_usd": total_utilidad_usd,
+        "rentabilidad_pct": rentabilidad_pct,
         "total_items": total_items,
         "total_paquetes": total_paquetes,
         "total_piezas": total_piezas,
@@ -407,9 +413,25 @@ def recepcionar_orden_servicio(
                     item_paquetes = item_override.numero_paquetes if item_override.numero_paquetes is not None else None
                     item_url_doc = item_override.url_documento or g_url_doc
 
-                    esp = item_override.espesor if item_override.espesor is not None else d.espesor
-                    anc = item_override.ancho if item_override.ancho is not None else d.ancho
-                    lar = item_override.largo if item_override.largo is not None else d.largo
+                    esp_r = item_override.espesor_real if item_override.espesor_real is not None else (item_override.espesor if item_override.espesor is not None else d.espesor)
+                    anc_r = item_override.ancho_real if item_override.ancho_real is not None else (item_override.ancho if item_override.ancho is not None else d.ancho)
+                    lar_r = item_override.largo_real if item_override.largo_real is not None else (item_override.largo if item_override.largo is not None else d.largo)
+                    pzs_r = item_override.piezas_real if item_override.piezas_real is not None else pzs
+                    vol_r = item_override.volumen_real if item_override.volumen_real is not None else vol_eq
+
+                    esp_e = item_override.espesor_entrada if item_override.espesor_entrada is not None else esp_r
+                    anc_e = item_override.ancho_entrada if item_override.ancho_entrada is not None else anc_r
+                    lar_e = item_override.largo_entrada if item_override.largo_entrada is not None else lar_r
+                    pzs_e = item_override.piezas_entrada if item_override.piezas_entrada is not None else pzs_r
+                    vol_e = item_override.volumen_entrada if item_override.volumen_entrada is not None else (vol if vol is not None else vol_r)
+
+                    esp = esp_r
+                    anc = anc_r
+                    lar = lar_r
+                    vol_eq = vol_r
+                    vol = vol_e
+                    pzs = pzs_r
+                    cant = vol_r if vol_r is not None else cant
                     txt = item_override.texto_abierto if item_override.texto_abierto is not None else d.texto_abierto
                     calc_subtotal = round(float(cant or vol_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((cant or vol_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
 
@@ -427,6 +449,16 @@ def recepcionar_orden_servicio(
                         id_unidad_medida_ancho=d.id_unidad_medida_ancho,
                         largo=lar,
                         id_unidad_medida_largo=d.id_unidad_medida_largo,
+                        espesor_entrada=esp_e,
+                        ancho_entrada=anc_e,
+                        largo_entrada=lar_e,
+                        piezas_entrada=pzs_e,
+                        volumen_entrada=vol_e,
+                        espesor_real=esp_r,
+                        ancho_real=anc_r,
+                        largo_real=lar_r,
+                        piezas_real=pzs_r,
+                        volumen_real=vol_r,
                         cantidad=cant,
                         precio_unitario=d.precio_unitario,
                         subtotal=calc_subtotal,
@@ -657,9 +689,25 @@ def recepcionar_orden_compra_puerto(
                     item_paquetes = item_override.numero_paquetes if item_override.numero_paquetes is not None else None
                     item_url_doc = item_override.url_documento or g_url_doc
 
-                    esp = item_override.espesor if item_override.espesor is not None else d.espesor
-                    anc = item_override.ancho if item_override.ancho is not None else d.ancho
-                    lar = item_override.largo if item_override.largo is not None else d.largo
+                    esp_r = item_override.espesor_real if item_override.espesor_real is not None else (item_override.espesor if item_override.espesor is not None else d.espesor)
+                    anc_r = item_override.ancho_real if item_override.ancho_real is not None else (item_override.ancho if item_override.ancho is not None else d.ancho)
+                    lar_r = item_override.largo_real if item_override.largo_real is not None else (item_override.largo if item_override.largo is not None else d.largo)
+                    pzs_r = item_override.piezas_real if item_override.piezas_real is not None else pzs
+                    vol_r = item_override.volumen_real if item_override.volumen_real is not None else vol_eq
+
+                    esp_e = item_override.espesor_entrada if item_override.espesor_entrada is not None else esp_r
+                    anc_e = item_override.ancho_entrada if item_override.ancho_entrada is not None else anc_r
+                    lar_e = item_override.largo_entrada if item_override.largo_entrada is not None else lar_r
+                    pzs_e = item_override.piezas_entrada if item_override.piezas_entrada is not None else pzs_r
+                    vol_e = item_override.volumen_entrada if item_override.volumen_entrada is not None else (vol if vol is not None else vol_r)
+
+                    esp = esp_r
+                    anc = anc_r
+                    lar = lar_r
+                    vol_eq = vol_r
+                    vol = vol_e
+                    pzs = pzs_r
+                    cant = vol_r if vol_r is not None else cant
                     txt = item_override.texto_abierto if item_override.texto_abierto is not None else d.texto_abierto
                     calc_subtotal = round(float(cant or vol_eq or 0) * float(d.precio_unitario or d.precio_eq or 0), 2) if ((cant or vol_eq) and (d.precio_unitario or d.precio_eq)) else d.subtotal
 
@@ -677,6 +725,16 @@ def recepcionar_orden_compra_puerto(
                         id_unidad_medida_ancho=d.id_unidad_medida_ancho,
                         largo=lar,
                         id_unidad_medida_largo=d.id_unidad_medida_largo,
+                        espesor_entrada=esp_e,
+                        ancho_entrada=anc_e,
+                        largo_entrada=lar_e,
+                        piezas_entrada=pzs_e,
+                        volumen_entrada=vol_e,
+                        espesor_real=esp_r,
+                        ancho_real=anc_r,
+                        largo_real=lar_r,
+                        piezas_real=pzs_r,
+                        volumen_real=vol_r,
                         cantidad=cant,
                         precio_unitario=d.precio_unitario,
                         subtotal=calc_subtotal,
