@@ -203,32 +203,201 @@ class InventarioPuerto(Base):
         pzs_real = _num(self.piezas_real) if self.piezas_real is not None else _num(self.piezas)
         vol_real = _num(self.volumen_real) if self.volumen_real is not None else (_num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0.0)
 
+        import re
+        um_cache = {}
+        if sess:
+            um_cache = sess.info.setdefault("_um_cache", {})
+            if not um_cache:
+                from app.models.unidad_medida import UnidadMedida
+                for um_row in sess.query(UnidadMedida).all():
+                    try:
+                        um_cache[um_row.id_unidad_medida] = float(um_row.equivalencia_mm)
+                    except Exception:
+                        pass
+        if not um_cache:
+            um_cache = {1: 25.4, 2: 1.0, 3: 1000.0, 4: 304.8, 5: 10.0}
+
+        def _get_um_eq(um_id, default_eq=1.0):
+            if not um_id:
+                return default_eq
+            return float(um_cache.get(um_id, default_eq))
+
+        def _extract_dim_nums(v):
+            if v is None:
+                return []
+            s = str(v).strip()
+            if not s:
+                return []
+            s = re.sub(r"(\d),(\d{3})(?!\d)", r"\1\2", s)
+            s = s.replace(",", ".")
+            out = []
+            for tok in re.findall(r"\d+(?:\.\d+)?", s):
+                try:
+                    out.append(float(tok))
+                except Exception:
+                    pass
+            return out
+
         def _parse_dim(v):
+            nums = _extract_dim_nums(v)
+            if len(nums) == 1:
+                return nums[0]
             if v is None:
                 return None
             s = str(v).strip().lower()
-            if not s:
-                return None
-            import re
-            m = re.match(r"^(\d+),(\d{3})$", s)
-            if m:
-                s = m.group(1) + m.group(2)
-            try:
-                return float(s.replace(",", "."))
-            except Exception:
-                return s
+            return s if s else None
 
-        def _dim_eq(v1, v2):
-            if not v1 or not v2:
-                return True
-            p1 = _parse_dim(v1)
-            p2 = _parse_dim(v2)
-            if isinstance(p1, float) and isinstance(p2, float):
-                return abs(p1 - p2) < 0.01
-            return str(p1).strip().lower() == str(p2).strip().lower()
+        def _infer_unit_tuple_and_exact_vol(e_val, a_val, l_val, pzs_val, vol_val, hint_tuple=None):
+            e_nums = _extract_dim_nums(e_val)
+            a_nums = _extract_dim_nums(a_val)
+            l_nums = _extract_dim_nums(l_val)
+            if len(e_nums) != 1 or len(a_nums) != 1 or len(l_nums) != 1:
+                return (hint_tuple or (1.0, 1.0, 1.0)), vol_val
+            en, an, ln = e_nums[0], a_nums[0], l_nums[0]
+            if en <= 0 or an <= 0 or ln <= 0:
+                return (hint_tuple or (1.0, 1.0, 1.0)), vol_val
+
+            candidates = []
+            if hint_tuple:
+                candidates.append(hint_tuple)
+            for t in [
+                (1.0, 1.0, 1.0),
+                (25.4, 25.4, 304.8),
+                (25.4, 25.4, 1000.0),
+                (25.4, 25.4, 1.0),
+                (25.4, 25.4, 25.4),
+                (1.0, 1.0, 1000.0),
+                (1.0, 1.0, 304.8),
+                (10.0, 10.0, 1000.0),
+                (10.0, 10.0, 10.0),
+            ]:
+                if t not in candidates:
+                    candidates.append(t)
+
+            if pzs_val and pzs_val > 0 and vol_val and vol_val > 0:
+                best_t = None
+                best_v = None
+                best_rel = 1.0
+                for fe, fa, fl in candidates:
+                    v_calc = (en * fe * an * fa * ln * fl * float(pzs_val)) / 1e9
+                    rel = abs(v_calc - float(vol_val)) / max(float(vol_val), 0.0001)
+                    if rel < best_rel:
+                        best_rel = rel
+                        best_t = (fe, fa, fl)
+                        best_v = v_calc
+                if best_t is not None and best_rel < 0.025:
+                    exact_v = best_v if abs(best_v - float(vol_val)) <= 0.002 else float(vol_val)
+                    return best_t, exact_v
+
+            if hint_tuple:
+                return hint_tuple, vol_val
+            fe = 25.4 if en < 10 else 1.0
+            fa = 25.4 if an < 30 else 1.0
+            fl = 304.8 if ln < 35 else (10.0 if ln < 500 else 1.0)
+            return (fe, fa, fl), vol_val
+
+        def _dim_match_any(det_val, item_val, det_eq_mm=1.0, item_eq_mm=1.0, tol_rel=0.08):
+            d_nums = _extract_dim_nums(det_val)
+            i_nums = _extract_dim_nums(item_val)
+            if not d_nums or not i_nums:
+                return False
+            same_unit = abs(float(det_eq_mm) - float(item_eq_mm)) < 0.01
+            for dn in d_nums:
+                for in_num in i_nums:
+                    if same_unit:
+                        if abs(dn - in_num) < 0.05:
+                            return True
+                    else:
+                        d_mm = dn * float(det_eq_mm)
+                        i_mm = in_num * float(item_eq_mm)
+                        if max(d_mm, i_mm) > 0 and (abs(d_mm - i_mm) / max(d_mm, i_mm)) <= tol_rel:
+                            return True
+            return False
+
+        def _map_dim_to_target(item_val, item_eq_mm, target_det_val, target_eq_mm, tol_rel=0.18):
+            i_nums = _extract_dim_nums(item_val)
+            t_nums = _extract_dim_nums(target_det_val)
+            if len(i_nums) != 1 or not t_nums:
+                return None
+            i_mm = i_nums[0] * float(item_eq_mm)
+            best_t = None
+            best_rel = 1.0
+            for tn in t_nums:
+                t_mm = tn * float(target_eq_mm)
+                if max(i_mm, t_mm) > 0:
+                    rel = abs(i_mm - t_mm) / max(i_mm, t_mm)
+                    if rel < best_rel:
+                        best_rel = rel
+                        best_t = tn
+            if best_t is not None and best_rel <= tol_rel:
+                return best_t
+            return None
+
+        def _fmt_dim_num(n):
+            if n is None:
+                return None
+            if abs(n - round(n)) < 1e-4:
+                return str(int(round(n)))
+            return f"{n:.3f}".rstrip("0").rstrip(".")
+
+        def _resolve_price_m3(det_obj, fe=1.0, fa=1.0, fl=1.0):
+            if not det_obj:
+                return 0.0
+            peq = _num(getattr(det_obj, "precio_eq", None))
+            if peq is not None and peq > 0:
+                return peq
+            sub = _num(getattr(det_obj, "subtotal", None))
+            veq = _num(getattr(det_obj, "volumen_eq", None)) or _num(getattr(det_obj, "volumen", None))
+            if sub is not None and sub > 0 and veq is not None and veq > 0:
+                return sub / veq
+            pu = _num(getattr(det_obj, "precio_unitario", None))
+            if pu is None or pu <= 0:
+                return 0.0
+            uv_id = getattr(det_obj, "id_unidad_venta", None)
+            if uv_id in (3, 14, 16):  # Pie / Pie Tablar / BF (1 m3 = 424 BF)
+                return pu * 424.0
+            e_nums = _extract_dim_nums(getattr(det_obj, "espesor", None))
+            a_nums = _extract_dim_nums(getattr(det_obj, "ancho", None))
+            l_nums = _extract_dim_nums(getattr(det_obj, "largo", None))
+            if uv_id in (7, 5) and len(e_nums) == 1 and len(a_nums) == 1 and len(l_nums) == 1:  # PZ / KT
+                v_pz = (e_nums[0] * fe * a_nums[0] * fa * l_nums[0] * fl) / 1e9
+                if v_pz > 0:
+                    return pu / v_pz
+            if uv_id in (4, 17) and len(e_nums) == 1 and len(a_nums) == 1:  # ML / METRO LINEAL
+                v_ml = (e_nums[0] * fe * a_nums[0] * fa) / 1e6
+                if v_ml > 0:
+                    return pu / v_ml
+            if uv_id == 10 and len(e_nums) == 1:  # M2
+                v_m2 = (e_nums[0] * fe) / 1000.0
+                if v_m2 > 0:
+                    return pu / v_m2
+            return pu
+
+        item_hint_tuple = (
+            _get_um_eq(self.id_unidad_medida_espesor, 1.0),
+            _get_um_eq(self.id_unidad_medida_ancho, 1.0),
+            _get_um_eq(self.id_unidad_medida_largo, 1.0),
+        )
+        ent_unit_tuple, vol_entrada_exact = _infer_unit_tuple_and_exact_vol(
+            esp_entrada, anc_entrada, lar_entrada, pzs_entrada, vol_entrada, item_hint_tuple
+        )
+        real_unit_tuple, vol_real_exact = _infer_unit_tuple_and_exact_vol(
+            esp_real, anc_real, lar_real, pzs_real, vol_real, item_hint_tuple
+        )
+
+        def _det_matches_dims(det_obj, e_val, a_val, l_val, item_tuple):
+            if not det_obj:
+                return False
+            d_fe = _get_um_eq(getattr(det_obj, "id_unidad_medida_espesor", None), 1.0)
+            d_fa = _get_um_eq(getattr(det_obj, "id_unidad_medida_ancho", None), 1.0)
+            d_fl = _get_um_eq(getattr(det_obj, "id_unidad_medida_largo", None), 1.0)
+            return (
+                _dim_match_any(det_obj.espesor, e_val, d_fe, item_tuple[0], tol_rel=0.18)
+                and _dim_match_any(det_obj.ancho, a_val, d_fa, item_tuple[1], tol_rel=0.08)
+                and _dim_match_any(det_obj.largo, l_val, d_fl, item_tuple[2], tol_rel=0.08)
+            )
 
         # 1. Costo Compra Base ($/m3) from origin OC (with SD/BS resolution and comision/flete addition)
-        import re
         candidate_oc_ids = []
         # Prioridad 1: OC de compra de origen del lote/paquete (oc_compra)
         if self.oc_compra:
@@ -276,45 +445,50 @@ class InventarioPuerto(Base):
                 if candidate_oc_ids and cand_det.id_orden_compra not in candidate_oc_ids:
                     d_match = None
                 elif (esp_entrada or anc_entrada or lar_entrada) and not (
-                    (_dim_eq(cand_det.espesor, esp_entrada) and _dim_eq(cand_det.ancho, anc_entrada) and _dim_eq(cand_det.largo, lar_entrada))
-                    or (_dim_eq(cand_det.espesor, esp_real) and _dim_eq(cand_det.ancho, anc_real) and _dim_eq(cand_det.largo, lar_real))
+                    _det_matches_dims(cand_det, esp_entrada, anc_entrada, lar_entrada, ent_unit_tuple)
+                    or _det_matches_dims(cand_det, esp_real, anc_real, lar_real, real_unit_tuple)
                 ):
                     d_match = None
                 else:
                     d_match = cand_det
 
         if not d_match and orig_dets:
-                # First try matching product and dimensions (prioritizing escuadría entrada, then escuadría real)
+            # First try matching product and dimensions (prioritizing escuadría entrada, then escuadría real)
+            dim_matches = [
+                d for d in orig_dets
+                if _det_matches_dims(d, esp_entrada, anc_entrada, lar_entrada, ent_unit_tuple)
+            ]
+            if not dim_matches:
                 dim_matches = [
                     d for d in orig_dets
-                    if _dim_eq(d.espesor, esp_entrada) and _dim_eq(d.ancho, anc_entrada) and _dim_eq(d.largo, lar_entrada)
+                    if _det_matches_dims(d, esp_real, anc_real, lar_real, real_unit_tuple)
                 ]
-                if not dim_matches:
-                    dim_matches = [
-                        d for d in orig_dets
-                        if _dim_eq(d.espesor, esp_real) and _dim_eq(d.ancho, anc_real) and _dim_eq(d.largo, lar_real)
-                    ]
-                
-                raw_str = f"{self.oc_compra or ''} {self.oc or ''}".upper()
-                is_sd = bool(re.search(r"\bSD\b", raw_str) or "SD" in raw_str)
-                is_bs = bool(re.search(r"\bBS\b", raw_str) or "BS" in raw_str)
 
-                pool = dim_matches if dim_matches else orig_dets
-                if is_sd and pool:
-                    d_match = max(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                elif is_bs and pool:
-                    d_match = min(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
-                else:
-                    prod_matches = [d for d in pool if self.id_producto and d.id_producto == self.id_producto]
-                    d_match = prod_matches[0] if prod_matches else pool[0]
+            raw_str = f"{self.oc_compra or ''} {self.oc or ''}".upper()
+            is_sd = bool(re.search(r"\bSD\b", raw_str) or "SD" in raw_str)
+            is_bs = bool(re.search(r"\bBS\b", raw_str) or "BS" in raw_str)
+
+            pool = dim_matches if dim_matches else orig_dets
+            if is_sd and pool:
+                d_match = max(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+            elif is_bs and pool:
+                d_match = min(pool, key=lambda d: float(d.precio_eq or d.precio_unitario or 0))
+            else:
+                prod_matches = [d for d in pool if self.id_producto and d.id_producto == self.id_producto]
+                d_match = prod_matches[0] if prod_matches else pool[0]
 
         comision_odc = 0.0
         flete_odc = 0.0
+        odc_unit_tuple = ent_unit_tuple
         if d_match:
-            if d_match.precio_eq is not None and float(d_match.precio_eq) > 0:
-                calc_peq = float(d_match.precio_eq)
-            elif d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
-                calc_peq = float(d_match.precio_unitario)
+            odc_unit_tuple = (
+                _get_um_eq(d_match.id_unidad_medida_espesor, 1.0),
+                _get_um_eq(d_match.id_unidad_medida_ancho, 1.0),
+                _get_um_eq(d_match.id_unidad_medida_largo, 1.0),
+            )
+            resolved_odc_peq = _resolve_price_m3(d_match, *odc_unit_tuple)
+            if resolved_odc_peq > 0:
+                calc_peq = resolved_odc_peq
             if d_match.precio_unitario is not None and float(d_match.precio_unitario) > 0:
                 calc_pu = float(d_match.precio_unitario)
             comision_odc = round(float(getattr(d_match, "comision", 0) or 0.0), 2)
@@ -514,18 +688,234 @@ class InventarioPuerto(Base):
                 vol_in = 1.0
                 vol_out = 1.0
 
-        # 3. Costo Madera ($/m3) y Costo Madera Real ($/m3):
+        # 3. Orden de Servicio (Flete $/m3) y Resolución de Proforma de Venta
+        os_obj = os
+        if not os_obj and g and g.id_orden_servicio and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_obj = sess.get(OrdenServicio, g.id_orden_servicio)
+        if not os_obj and gcs and gcs.ordenes_servicio:
+            os_obj = gcs.ordenes_servicio[0]
+        if not os_obj and self.id_orden_compra and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_by_oc_cache = sess.info.setdefault("_os_by_oc_cache", {})
+            if self.id_orden_compra not in os_by_oc_cache:
+                os_by_oc_cache[self.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == self.id_orden_compra).first()
+            os_obj = os_by_oc_cache[self.id_orden_compra]
+        if not os_obj and g and g.id_orden_compra and sess:
+            from app.models.orden_servicio import OrdenServicio
+            os_by_oc_cache = sess.info.setdefault("_os_by_oc_cache", {})
+            if g.id_orden_compra not in os_by_oc_cache:
+                os_by_oc_cache[g.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == g.id_orden_compra).first()
+            os_obj = os_by_oc_cache[g.id_orden_compra]
+
+        id_proforma_venta = None
+        oe_numero = None
+        precio_venta_m3 = None
+        precio_venta_unitario = None
+        venta_total_usd = None
+        utilidad_m3 = None
+        utilidad_total = None
+        rentabilidad_pct = None
+        rentabilidad_costo_pct = None
+        dp_match = None
+        pf_unit_tuple = real_unit_tuple
+
+        if sess:
+            from app.models.orden_compra import OrdenCompra
+            from app.models.proforma import Proforma
+            from app.models.detalle_proforma import DetalleProforma
+
+            oc_obj_cache = sess.info.setdefault("_oc_obj_cache", {})
+            pf_obj_cache = sess.info.setdefault("_pf_obj_cache", {})
+            pf_by_oe_cache = sess.info.setdefault("_pf_by_oe_cache", {})
+            pf_dets_cache = sess.info.setdefault("_pf_dets_cache", {})
+
+            def _get_oc_obj(cid):
+                if not cid:
+                    return None
+                if cid not in oc_obj_cache:
+                    oc_obj_cache[cid] = sess.get(OrdenCompra, cid)
+                return oc_obj_cache[cid]
+
+            def _get_pf_obj(pid):
+                if not pid:
+                    return None
+                if pid not in pf_obj_cache:
+                    pf_obj_cache[pid] = sess.get(Proforma, pid)
+                return pf_obj_cache[pid]
+
+            def _get_pf_by_oe(oe_num):
+                if not oe_num:
+                    return None
+                if oe_num not in pf_by_oe_cache:
+                    pf_by_oe_cache[oe_num] = sess.query(Proforma).filter(Proforma.id_operacion_exportacion == oe_num).first()
+                return pf_by_oe_cache[oe_num]
+
+            pf_target = None
+            # A) Directo desde id_orden_compra de item, guía u OS
+            for direct_oc_id in [
+                self.id_orden_compra,
+                (g.id_orden_compra if g else None),
+                (os_obj.id_orden_compra if os_obj else None),
+            ]:
+                if direct_oc_id:
+                    oc_cand = _get_oc_obj(direct_oc_id)
+                    if oc_cand and oc_cand.id_proforma:
+                        pf_target = _get_pf_obj(oc_cand.id_proforma)
+                        if pf_target:
+                            break
+
+            # B) Desde los números en el campo oc (ej: "8160-8083" -> OE 8160 o OC 8083)
+            if not pf_target:
+                oc_nums = []
+                for raw_oc_str in [self.oc, (g.oc if g else None), self.oc_compra]:
+                    if raw_oc_str:
+                        for ns in re.findall(r"\d+", str(raw_oc_str)):
+                            ni = int(ns)
+                            if ni not in oc_nums:
+                                oc_nums.append(ni)
+                for ni in oc_nums:
+                    oc_cand = _get_oc_obj(ni)
+                    if oc_cand and oc_cand.id_proforma:
+                        pf_target = _get_pf_obj(oc_cand.id_proforma)
+                        if pf_target:
+                            break
+                    pf_cand = _get_pf_by_oe(ni)
+                    if pf_cand:
+                        pf_target = pf_cand
+                        break
+                    pf_cand2 = _get_pf_obj(ni)
+                    if pf_cand2:
+                        pf_target = pf_cand2
+                        break
+
+            if pf_target:
+                id_proforma_venta = pf_target.id_proforma
+                oe_numero = pf_target.id_operacion_exportacion
+                if id_proforma_venta not in pf_dets_cache:
+                    pf_dets_cache[id_proforma_venta] = (
+                        sess.query(DetalleProforma)
+                        .filter(DetalleProforma.id_proforma == id_proforma_venta)
+                        .all()
+                    )
+                pf_dets = pf_dets_cache[id_proforma_venta]
+
+                def _is_wood_pf_det(dp):
+                    has_dims = bool(_extract_dim_nums(dp.espesor) or _extract_dim_nums(dp.ancho) or _extract_dim_nums(dp.largo))
+                    if getattr(dp, "id_unidad_venta", None) in (8, 11) and not has_dims:
+                        return False
+                    txt = str(getattr(dp, "texto_libre", "") or "").upper()
+                    if not has_dims and any(w in txt for w in ["SEGURO", "FLETE", "BL ", "+ BL", "COMISION", "GASTO"]):
+                        return False
+                    return True
+
+                wood_pf_dets = [dp for dp in pf_dets if _is_wood_pf_det(dp)] if pf_dets else []
+                search_pf_dets = wood_pf_dets if wood_pf_dets else (pf_dets or [])
+
+                if search_pf_dets:
+                    exact_dp = [
+                        dp for dp in search_pf_dets
+                        if _det_matches_dims(dp, esp_real, anc_real, lar_real, real_unit_tuple)
+                    ]
+                    if not exact_dp:
+                        exact_dp = [
+                            dp for dp in search_pf_dets
+                            if _det_matches_dims(dp, esp_entrada, anc_entrada, lar_entrada, ent_unit_tuple)
+                        ]
+                    if exact_dp:
+                        dp_match = exact_dp[0]
+                    else:
+                        ea_dp = [
+                            dp for dp in search_pf_dets
+                            if _dim_match_any(
+                                dp.espesor,
+                                esp_real,
+                                _get_um_eq(dp.id_unidad_medida_espesor, 1.0),
+                                real_unit_tuple[0],
+                                tol_rel=0.18,
+                            )
+                            and _dim_match_any(
+                                dp.ancho,
+                                anc_real,
+                                _get_um_eq(dp.id_unidad_medida_ancho, 1.0),
+                                real_unit_tuple[1],
+                                tol_rel=0.08,
+                            )
+                        ]
+                        if ea_dp:
+                            dp_match = ea_dp[0]
+                        else:
+                            prod_dp = [dp for dp in search_pf_dets if self.id_producto and dp.id_producto == self.id_producto]
+                            dp_match = prod_dp[0] if prod_dp else search_pf_dets[0]
+
+                if dp_match:
+                    pf_unit_tuple = (
+                        _get_um_eq(dp_match.id_unidad_medida_espesor, 1.0),
+                        _get_um_eq(dp_match.id_unidad_medida_ancho, 1.0),
+                        _get_um_eq(dp_match.id_unidad_medida_largo, 1.0),
+                    )
+                    resolved_pf_peq = _resolve_price_m3(dp_match, *pf_unit_tuple)
+                    if resolved_pf_peq > 0:
+                        precio_venta_m3 = round(resolved_pf_peq, 2)
+                    if dp_match.precio_unitario is not None and _num(dp_match.precio_unitario) and _num(dp_match.precio_unitario) > 0:
+                        precio_venta_unitario = round(_num(dp_match.precio_unitario), 4)
+
+        # 3.0 Conversión automática entre Unidad de Medida de Compra (OC) y Unidad de Medida de Venta (Proforma / Real)
+        # Si el ítem se cargó con una sola escuadría (esp_entrada == esp_real) pero la OC de compra y la Proforma/ítem
+        # están en distintas unidades de medida (ej: Compra en mm 22x100&150x2134-1066 vs Venta en pulg/pies 1"x4-6"x7&3.5'),
+        # derivar la escuadría y el volumen cúbico exacto en la unidad correspondiente.
+        same_stored_dims = (
+            str(esp_entrada or "").strip() == str(esp_real or "").strip()
+            and str(anc_entrada or "").strip() == str(anc_real or "").strip()
+            and str(lar_entrada or "").strip() == str(lar_real or "").strip()
+            and abs((vol_entrada or 0.0) - (vol_real or 0.0)) < 0.001
+        )
+        if same_stored_dims:
+            if d_match and odc_unit_tuple != real_unit_tuple:
+                m_e = _map_dim_to_target(esp_real, real_unit_tuple[0], d_match.espesor, odc_unit_tuple[0], tol_rel=0.18)
+                m_a = _map_dim_to_target(anc_real, real_unit_tuple[1], d_match.ancho, odc_unit_tuple[1], tol_rel=0.08)
+                m_l = _map_dim_to_target(lar_real, real_unit_tuple[2], d_match.largo, odc_unit_tuple[2], tol_rel=0.08)
+                if m_e and m_a and m_l:
+                    esp_entrada = _fmt_dim_num(m_e)
+                    anc_entrada = _fmt_dim_num(m_a)
+                    lar_entrada = _fmt_dim_num(m_l)
+                    ent_unit_tuple = odc_unit_tuple
+                    if pzs_entrada and pzs_entrada > 0:
+                        vol_entrada_exact = (
+                            m_e * odc_unit_tuple[0] * m_a * odc_unit_tuple[1] * m_l * odc_unit_tuple[2] * float(pzs_entrada)
+                        ) / 1e9
+                        vol_entrada = round(vol_entrada_exact, 3)
+            elif dp_match and pf_unit_tuple != ent_unit_tuple:
+                m_e = _map_dim_to_target(esp_entrada, ent_unit_tuple[0], dp_match.espesor, pf_unit_tuple[0], tol_rel=0.18)
+                m_a = _map_dim_to_target(anc_entrada, ent_unit_tuple[1], dp_match.ancho, pf_unit_tuple[1], tol_rel=0.08)
+                m_l = _map_dim_to_target(lar_entrada, ent_unit_tuple[2], dp_match.largo, pf_unit_tuple[2], tol_rel=0.08)
+                if m_e and m_a and m_l:
+                    esp_real = _fmt_dim_num(m_e)
+                    anc_real = _fmt_dim_num(m_a)
+                    lar_real = _fmt_dim_num(m_l)
+                    real_unit_tuple = pf_unit_tuple
+                    if pzs_real and pzs_real > 0:
+                        vol_real_exact = (
+                            m_e * pf_unit_tuple[0] * m_a * pf_unit_tuple[1] * m_l * pf_unit_tuple[2] * float(pzs_real)
+                        ) / 1e9
+                        vol_real = round(vol_real_exact, 3)
+
+        # 3.1 Costo Madera ($/m3) y Costo Madera Real ($/m3):
         # - costo_madera_m3: Costo de madera de compra / salida de proceso en planta (GCS: vol_in / vol_out)
-        # - costo_madera_real_m3: Costo efectivo real de la madera ajustado por la variación entre Volumen Entrada y Volumen Real recibido en puerto
+        # - costo_madera_real_m3: Costo efectivo real de la madera ajustado por la variación entre Volumen Entrada (unidad de compra)
+        #   y Volumen Real recibido/vendido en puerto (unidad de venta)
         costo_madera_m3 = round((vol_in * costo_compra_m3) / vol_out, 2) if (vol_out and vol_out > 0) else round(costo_compra_m3, 2)
 
-        if vol_entrada and vol_real and vol_entrada > 0 and vol_real > 0 and abs(vol_entrada - vol_real) > 0.0001:
+        eff_vol_ent = vol_entrada_exact if (vol_entrada_exact and vol_entrada_exact > 0) else vol_entrada
+        eff_vol_real = vol_real_exact if (vol_real_exact and vol_real_exact > 0) else vol_real
+
+        if eff_vol_ent and eff_vol_real and eff_vol_ent > 0 and eff_vol_real > 0 and abs(eff_vol_ent - eff_vol_real) > 0.0001:
             base_madera_unrounded = ((vol_in * costo_compra_m3) / vol_out) if (vol_out and vol_out > 0) else costo_compra_m3
-            costo_madera_real_m3 = round(base_madera_unrounded * (vol_entrada / vol_real), 2)
+            costo_madera_real_m3 = round(base_madera_unrounded * (eff_vol_ent / eff_vol_real), 2)
         else:
             costo_madera_real_m3 = costo_madera_m3
 
-        # 3.1 Servicios Planta ($/m3) diferenciados por sub-lote / proceso (tarifa base directa sin factor de rendimiento)
+        # 3.2 Servicios Planta ($/m3) diferenciados por sub-lote / proceso (tarifa base directa sin factor de rendimiento)
         if gcs and (gcs.detalles or gcs.detalles_proceso):
             explicit_proc_weighted = 0.0
             explicit_proc_vol = 0.0
@@ -590,27 +980,7 @@ class InventarioPuerto(Base):
                 if serv_item > 0:
                     servicios_m3 = round(serv_item, 2)
 
-        # 4. Orden de Servicio (Flete $/m3)
-        # ya que puede o no tener orden de servicio
-        os_obj = os
-        if not os_obj and g and g.id_orden_servicio and sess:
-            from app.models.orden_servicio import OrdenServicio
-            os_obj = sess.get(OrdenServicio, g.id_orden_servicio)
-        if not os_obj and gcs and gcs.ordenes_servicio:
-            os_obj = gcs.ordenes_servicio[0]
-        if not os_obj and self.id_orden_compra and sess:
-            from app.models.orden_servicio import OrdenServicio
-            os_by_oc_cache = sess.info.setdefault("_os_by_oc_cache", {})
-            if self.id_orden_compra not in os_by_oc_cache:
-                os_by_oc_cache[self.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == self.id_orden_compra).first()
-            os_obj = os_by_oc_cache[self.id_orden_compra]
-        if not os_obj and g and g.id_orden_compra and sess:
-            from app.models.orden_servicio import OrdenServicio
-            os_by_oc_cache = sess.info.setdefault("_os_by_oc_cache", {})
-            if g.id_orden_compra not in os_by_oc_cache:
-                os_by_oc_cache[g.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == g.id_orden_compra).first()
-            os_obj = os_by_oc_cache[g.id_orden_compra]
-
+        # 4. Cálculo de Flete por m3 sobre Orden de Servicio
         flete_m3 = 0.0
         tiene_os = False
         id_os_linked = self.id_orden_servicio
@@ -642,128 +1012,6 @@ class InventarioPuerto(Base):
         costo_servicios_total = round(vol_item * servicios_m3, 2)
         costo_flete_total = round(vol_item * flete_m3, 2)
         calc_sub = costo_madera_total
-
-        # 6. Precio Venta Proforma y Rentabilidad / Utilidad Real en Puerto
-        id_proforma_venta = None
-        oe_numero = None
-        precio_venta_m3 = None
-        precio_venta_unitario = None
-        venta_total_usd = None
-        utilidad_m3 = None
-        utilidad_total = None
-        rentabilidad_pct = None
-        rentabilidad_costo_pct = None
-
-        if sess:
-            from app.models.orden_compra import OrdenCompra
-            from app.models.proforma import Proforma
-            from app.models.detalle_proforma import DetalleProforma
-
-            oc_obj_cache = sess.info.setdefault("_oc_obj_cache", {})
-            pf_obj_cache = sess.info.setdefault("_pf_obj_cache", {})
-            pf_by_oe_cache = sess.info.setdefault("_pf_by_oe_cache", {})
-            pf_dets_cache = sess.info.setdefault("_pf_dets_cache", {})
-
-            def _get_oc_obj(cid):
-                if not cid:
-                    return None
-                if cid not in oc_obj_cache:
-                    oc_obj_cache[cid] = sess.get(OrdenCompra, cid)
-                return oc_obj_cache[cid]
-
-            def _get_pf_obj(pid):
-                if not pid:
-                    return None
-                if pid not in pf_obj_cache:
-                    pf_obj_cache[pid] = sess.get(Proforma, pid)
-                return pf_obj_cache[pid]
-
-            def _get_pf_by_oe(oe_num):
-                if not oe_num:
-                    return None
-                if oe_num not in pf_by_oe_cache:
-                    pf_by_oe_cache[oe_num] = sess.query(Proforma).filter(Proforma.id_operacion_exportacion == oe_num).first()
-                return pf_by_oe_cache[oe_num]
-
-            pf_target = None
-            # A) Directo desde id_orden_compra de item, guía u OS
-            for direct_oc_id in [
-                self.id_orden_compra,
-                (g.id_orden_compra if g else None),
-                (os_obj.id_orden_compra if os_obj else None),
-            ]:
-                if direct_oc_id:
-                    oc_cand = _get_oc_obj(direct_oc_id)
-                    if oc_cand and oc_cand.id_proforma:
-                        pf_target = _get_pf_obj(oc_cand.id_proforma)
-                        if pf_target:
-                            break
-
-            # B) Desde los números en el campo oc (ej: "8160-8083" -> OE 8160 o OC 8083)
-            if not pf_target:
-                oc_nums = []
-                for raw_oc_str in [self.oc, (g.oc if g else None)]:
-                    if raw_oc_str:
-                        for ns in re.findall(r"\d+", str(raw_oc_str)):
-                            ni = int(ns)
-                            if ni not in oc_nums:
-                                oc_nums.append(ni)
-                for ni in oc_nums:
-                    oc_cand = _get_oc_obj(ni)
-                    if oc_cand and oc_cand.id_proforma:
-                        pf_target = _get_pf_obj(oc_cand.id_proforma)
-                        if pf_target:
-                            break
-                    pf_cand = _get_pf_by_oe(ni)
-                    if pf_cand:
-                        pf_target = pf_cand
-                        break
-                    pf_cand2 = _get_pf_obj(ni)
-                    if pf_cand2:
-                        pf_target = pf_cand2
-                        break
-
-            if pf_target:
-                id_proforma_venta = pf_target.id_proforma
-                oe_numero = pf_target.id_operacion_exportacion
-                if id_proforma_venta not in pf_dets_cache:
-                    pf_dets_cache[id_proforma_venta] = (
-                        sess.query(DetalleProforma)
-                        .filter(DetalleProforma.id_proforma == id_proforma_venta)
-                        .all()
-                    )
-                pf_dets = pf_dets_cache[id_proforma_venta]
-                dp_match = None
-                if pf_dets:
-                    exact_dp = [
-                        dp for dp in pf_dets
-                        if _dim_eq(dp.espesor, esp_real)
-                        and _dim_eq(dp.ancho, anc_real)
-                        and _dim_eq(dp.largo, lar_real)
-                    ]
-                    if exact_dp:
-                        dp_match = exact_dp[0]
-                    else:
-                        ea_dp = [
-                            dp for dp in pf_dets
-                            if _dim_eq(dp.espesor, esp_real) and _dim_eq(dp.ancho, anc_real)
-                        ]
-                        if ea_dp:
-                            dp_match = ea_dp[0]
-                        else:
-                            prod_dp = [dp for dp in pf_dets if self.id_producto and dp.id_producto == self.id_producto]
-                            dp_match = prod_dp[0] if prod_dp else pf_dets[0]
-
-                if dp_match:
-                    if dp_match.precio_eq is not None and float(dp_match.precio_eq) > 0:
-                        precio_venta_m3 = round(float(dp_match.precio_eq), 2)
-                    elif dp_match.subtotal and dp_match.volumen_eq and float(dp_match.volumen_eq) > 0:
-                        precio_venta_m3 = round(float(dp_match.subtotal) / float(dp_match.volumen_eq), 2)
-                    elif dp_match.precio_unitario is not None and float(dp_match.precio_unitario) > 0:
-                        precio_venta_m3 = round(float(dp_match.precio_unitario), 2)
-
-                    if dp_match.precio_unitario is not None and float(dp_match.precio_unitario) > 0:
-                        precio_venta_unitario = round(float(dp_match.precio_unitario), 4)
 
         if precio_venta_m3 is not None and precio_venta_m3 > 0:
             venta_total_usd = round(vol_item * precio_venta_m3, 2)
