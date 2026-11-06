@@ -191,6 +191,18 @@ class InventarioPuerto(Base):
         calc_peq = _num(self.precio_eq)
         calc_sub = _num(self.subtotal)
 
+        esp_entrada = self.espesor_entrada if self.espesor_entrada is not None else self.espesor
+        anc_entrada = self.ancho_entrada if self.ancho_entrada is not None else self.ancho
+        lar_entrada = self.largo_entrada if self.largo_entrada is not None else self.largo
+        pzs_entrada = _num(self.piezas_entrada) if self.piezas_entrada is not None else _num(self.piezas)
+        vol_entrada = _num(self.volumen_entrada) if self.volumen_entrada is not None else (_num(self.volumen) or _num(self.volumen_eq))
+
+        esp_real = self.espesor_real if self.espesor_real is not None else self.espesor
+        anc_real = self.ancho_real if self.ancho_real is not None else self.ancho
+        lar_real = self.largo_real if self.largo_real is not None else self.largo
+        pzs_real = _num(self.piezas_real) if self.piezas_real is not None else _num(self.piezas)
+        vol_real = _num(self.volumen_real) if self.volumen_real is not None else (_num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0.0)
+
         def _parse_dim(v):
             if v is None:
                 return None
@@ -263,14 +275,25 @@ class InventarioPuerto(Base):
                 # Verificar que el detalle pertenezca a la OC origen correcta si existe candidate_oc_ids
                 if candidate_oc_ids and cand_det.id_orden_compra not in candidate_oc_ids:
                     d_match = None
-                elif (self.espesor or self.ancho or self.largo) and not (_dim_eq(cand_det.espesor, self.espesor) and _dim_eq(cand_det.ancho, self.ancho) and _dim_eq(cand_det.largo, self.largo)):
+                elif (esp_entrada or anc_entrada or lar_entrada) and not (
+                    (_dim_eq(cand_det.espesor, esp_entrada) and _dim_eq(cand_det.ancho, anc_entrada) and _dim_eq(cand_det.largo, lar_entrada))
+                    or (_dim_eq(cand_det.espesor, esp_real) and _dim_eq(cand_det.ancho, anc_real) and _dim_eq(cand_det.largo, lar_real))
+                ):
                     d_match = None
                 else:
                     d_match = cand_det
 
         if not d_match and orig_dets:
-                # First try matching product and dimensions
-                dim_matches = [d for d in orig_dets if _dim_eq(d.espesor, self.espesor) and _dim_eq(d.ancho, self.ancho) and _dim_eq(d.largo, self.largo)]
+                # First try matching product and dimensions (prioritizing escuadría entrada, then escuadría real)
+                dim_matches = [
+                    d for d in orig_dets
+                    if _dim_eq(d.espesor, esp_entrada) and _dim_eq(d.ancho, anc_entrada) and _dim_eq(d.largo, lar_entrada)
+                ]
+                if not dim_matches:
+                    dim_matches = [
+                        d for d in orig_dets
+                        if _dim_eq(d.espesor, esp_real) and _dim_eq(d.ancho, anc_real) and _dim_eq(d.largo, lar_real)
+                    ]
                 
                 raw_str = f"{self.oc_compra or ''} {self.oc or ''}".upper()
                 is_sd = bool(re.search(r"\bSD\b", raw_str) or "SD" in raw_str)
@@ -491,8 +514,16 @@ class InventarioPuerto(Base):
                 vol_in = 1.0
                 vol_out = 1.0
 
-        # 3. Costo Madera Ajustado ($/m3): ((volumen entrada * costo compra) / volumen salida)
+        # 3. Costo Madera ($/m3) y Costo Madera Real ($/m3):
+        # - costo_madera_m3: Costo de madera de compra / salida de proceso en planta (GCS: vol_in / vol_out)
+        # - costo_madera_real_m3: Costo efectivo real de la madera ajustado por la variación entre Volumen Entrada y Volumen Real recibido en puerto
         costo_madera_m3 = round((vol_in * costo_compra_m3) / vol_out, 2) if (vol_out and vol_out > 0) else round(costo_compra_m3, 2)
+
+        if vol_entrada and vol_real and vol_entrada > 0 and vol_real > 0 and abs(vol_entrada - vol_real) > 0.0001:
+            base_madera_unrounded = ((vol_in * costo_compra_m3) / vol_out) if (vol_out and vol_out > 0) else costo_compra_m3
+            costo_madera_real_m3 = round(base_madera_unrounded * (vol_entrada / vol_real), 2)
+        else:
+            costo_madera_real_m3 = costo_madera_m3
 
         # 3.1 Servicios Planta ($/m3) diferenciados por sub-lote / proceso (tarifa base directa sin factor de rendimiento)
         if gcs and (gcs.detalles or gcs.detalles_proceso):
@@ -580,18 +611,6 @@ class InventarioPuerto(Base):
                 os_by_oc_cache[g.id_orden_compra] = sess.query(OrdenServicio).filter(OrdenServicio.id_orden_compra == g.id_orden_compra).first()
             os_obj = os_by_oc_cache[g.id_orden_compra]
 
-        esp_entrada = self.espesor_entrada if self.espesor_entrada is not None else self.espesor
-        anc_entrada = self.ancho_entrada if self.ancho_entrada is not None else self.ancho
-        lar_entrada = self.largo_entrada if self.largo_entrada is not None else self.largo
-        pzs_entrada = _num(self.piezas_entrada) if self.piezas_entrada is not None else _num(self.piezas)
-        vol_entrada = _num(self.volumen_entrada) if self.volumen_entrada is not None else (_num(self.volumen) or _num(self.volumen_eq))
-
-        esp_real = self.espesor_real if self.espesor_real is not None else self.espesor
-        anc_real = self.ancho_real if self.ancho_real is not None else self.ancho
-        lar_real = self.largo_real if self.largo_real is not None else self.largo
-        pzs_real = _num(self.piezas_real) if self.piezas_real is not None else _num(self.piezas)
-        vol_real = _num(self.volumen_real) if self.volumen_real is not None else (_num(self.volumen_eq) or _num(self.volumen) or _num(self.cantidad) or 0.0)
-
         flete_m3 = 0.0
         tiene_os = False
         id_os_linked = self.id_orden_servicio
@@ -615,11 +634,11 @@ class InventarioPuerto(Base):
                 flete_m3 = round(flete_total / vol_transporte, 2)
 
         # 5. Costo Final (Unitario y Totales sobre el Volumen Real llegado a puerto)
-        # Formula: ((cantidad volumen entrada x costo compra) / volumen salida) + servicios + flete
-        costo_final_unitario = round(costo_madera_m3 + servicios_m3 + flete_m3, 2)
+        # Formula: Costo Madera Real + Servicios + Flete
+        costo_final_unitario = round(costo_madera_real_m3 + servicios_m3 + flete_m3, 2)
         vol_item = vol_real or 0.0
         costo_final_total = round(vol_item * costo_final_unitario, 2)
-        costo_madera_total = round(vol_item * costo_madera_m3, 2)
+        costo_madera_total = round(vol_item * costo_madera_real_m3, 2)
         costo_servicios_total = round(vol_item * servicios_m3, 2)
         costo_flete_total = round(vol_item * flete_m3, 2)
         calc_sub = costo_madera_total
@@ -814,6 +833,7 @@ class InventarioPuerto(Base):
             "volumen_salida_2da_guia": round(vol_2da_tot, 4) if vol_2da_tot > 0 else None,
             "volumen_total_salida_gcs": round(total_vol_salida_gcs, 4) if total_vol_salida_gcs > 0 else None,
             "costo_madera_m3": costo_madera_m3,
+            "costo_madera_real_m3": costo_madera_real_m3,
             "servicios_m3": servicios_m3,
             "flete_m3": flete_m3,
             "costo_final_unitario": costo_final_unitario,

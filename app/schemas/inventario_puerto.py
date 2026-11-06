@@ -176,6 +176,7 @@ class InventarioPuertoRead(InventarioPuertoBase):
     volumen_salida_2da_guia: Optional[float] = None
     volumen_total_salida_gcs: Optional[float] = None
     costo_madera_m3: Optional[float] = None
+    costo_madera_real_m3: Optional[float] = None
     servicios_m3: Optional[float] = None
     flete_m3: Optional[float] = None
     costo_final_unitario: Optional[float] = None

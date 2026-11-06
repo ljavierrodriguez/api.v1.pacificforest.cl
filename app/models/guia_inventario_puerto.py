@@ -155,7 +155,8 @@ class GuiaInventarioPuerto(Base):
                     detalles_list[-1]["costo_flete_total"] = round(detalles_list[-1]["costo_flete_total"] + diff, 2)
                 for d in detalles_list:
                     d["flete_m3"] = flete_m3
-                    d["costo_final_unitario"] = round(float(d.get("costo_madera_m3") or 0) + float(d.get("servicios_m3") or 0) + flete_m3, 2)
+                    cm_real = float(d.get("costo_madera_real_m3") or d.get("costo_madera_m3") or 0)
+                    d["costo_final_unitario"] = round(cm_real + float(d.get("servicios_m3") or 0) + flete_m3, 2)
                     d["costo_final_total"] = round(float(d.get("costo_madera_total") or 0) + float(d.get("costo_servicios_total") or 0) + float(d.get("costo_flete_total") or 0), 2)
                     pv_m3 = d.get("precio_venta_m3")
                     if pv_m3 is not None and float(pv_m3) > 0:

@@ -66,11 +66,25 @@ def log_database_target() -> None:
         print("[DB] No se pudo parsear DATABASE_URL_DB")
 
     try:
+        from sqlalchemy import text
         from app.db.session import SessionLocalDB
         import app.models
         from app.models.estado_orden_servicio import EstadoOrdenServicio
 
         db = SessionLocalDB()
+        for col_sql in [
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS espesor_entrada VARCHAR(20)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS ancho_entrada VARCHAR(20)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS largo_entrada VARCHAR(20)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS piezas_entrada NUMERIC(12, 3)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS volumen_entrada NUMERIC(12, 3)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS espesor_real VARCHAR(20)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS ancho_real VARCHAR(20)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS largo_real VARCHAR(20)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS piezas_real NUMERIC(12, 3)",
+            "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS volumen_real NUMERIC(12, 3)",
+        ]:
+            db.execute(text(col_sql))
         estados_default = [(1, "PENDIENTE"), (2, "EN PROCESO"), (3, "CUMPLIDA"), (4, "ANULADA")]
         for eid, nombre in estados_default:
             existing = db.query(EstadoOrdenServicio).filter_by(id_estado_orden_servicio=eid).first()
