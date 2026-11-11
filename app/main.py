@@ -84,6 +84,9 @@ def log_database_target() -> None:
             "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS piezas_real NUMERIC(12, 3)",
             "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS volumen_real NUMERIC(12, 3)",
             "ALTER TABLE usuario ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'PERSONALIZADO'",
+            "ALTER TABLE usuario ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE usuario ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(120)",
+            "ALTER TABLE usuario ADD COLUMN IF NOT EXISTS two_factor_backup_codes VARCHAR(1000)",
             "ALTER TABLE seguridad ALTER COLUMN modulo TYPE VARCHAR(60)",
             "UPDATE usuario SET rol = 'ADMINISTRADOR' WHERE (rol IS NULL OR rol = 'PERSONALIZADO') AND (LOWER(login) IN ('admin', 'administrador', 'lrodriguez') OR id_usuario IN (SELECT id_usuario FROM seguridad WHERE UPPER(modulo) IN ('SEGURIDAD', 'USUARIO') AND crear = TRUE))",
         ]:

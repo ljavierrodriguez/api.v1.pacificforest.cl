@@ -109,6 +109,28 @@ def verify_password_reset_token(token: str) -> Optional[int]:
         return None
 
 
+def create_2fa_temp_token(username: str, user_id: int) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=5)
+    to_encode = {
+        "sub": username,
+        "uid": user_id,
+        "type": "2fa_challenge",
+        "exp": expire,
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_2fa_temp_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "2fa_challenge":
+            return None
+        username = payload.get("sub")
+        return str(username) if username else None
+    except Exception:
+        return None
+
+
 def authenticate_user(db: Session, username: str, password: str):
     # Normalizar el username a minúsculas para hacer el login case-insensitive
     username_lower = username.lower() if username else ""
@@ -144,6 +166,8 @@ def get_current_user(
 
     try:
         payload = jwt.decode(resolved_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") in ("2fa_challenge", "password_reset"):
+            raise credentials_exception
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception

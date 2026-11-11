@@ -271,6 +271,9 @@ class User(Base):
     url_firma = Column(String(255), nullable=True)
     rol = Column(String(50), nullable=False, default="PERSONALIZADO", server_default="PERSONALIZADO")
     activo = Column(Boolean, default=True, nullable=False)
+    two_factor_enabled = Column(Boolean, default=False, server_default="false", nullable=False)
+    two_factor_secret = Column(String(120), nullable=True)
+    two_factor_backup_codes = Column(String(1000), nullable=True)
 
     __table_args__ = (UniqueConstraint("login", name="uq_usuario_login"),)
 
@@ -425,6 +428,8 @@ class User(Base):
                 seguridades_consolidadas.append(s)
                 seen_mods.add(mod_upper)
 
+        from app.core.totp import count_remaining_backup_codes
+
         return {
             "id_usuario": self.id_usuario,
             "rut": self.rut or "",
@@ -435,6 +440,8 @@ class User(Base):
             "url_firma": self.url_firma,
             "rol": rol_value,
             "activo": bool(self.activo),
+            "two_factor_enabled": bool(getattr(self, "two_factor_enabled", False)),
+            "backup_codes_remaining": count_remaining_backup_codes(getattr(self, "two_factor_backup_codes", None)),
             "seguridades": seguridades_consolidadas,
             "permissions": permisos_by_mod,
             "permisos": permisos_by_mod,
