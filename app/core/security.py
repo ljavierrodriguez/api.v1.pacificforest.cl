@@ -115,6 +115,8 @@ def authenticate_user(db: Session, username: str, password: str):
     user = db.query(User).filter(User.login == username_lower).first()
     if not user:
         return False
+    if not getattr(user, "activo", True):
+        return False
     ok, new_hash = verify_password(password, user.hashed_password)
     if not ok:
         return False
@@ -151,6 +153,11 @@ def get_current_user(
     user = db.query(User).filter(User.login == token_data.username).first()
     if user is None:
         raise credentials_exception
+    if not getattr(user, "activo", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario inactivo. Contacte al administrador.",
+        )
     return user
 
 

@@ -8,7 +8,7 @@ class Seguridad(Base):
 
     id_seguridad = Column(Integer, primary_key=True, autoincrement=True, index=True)
     id_usuario = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
-    modulo = Column(String(15), nullable=False)
+    modulo = Column(String(60), nullable=False)
     crear = Column(Boolean, nullable=False, default=False)
     ver = Column(Boolean, nullable=False, default=False)
     editar = Column(Boolean, nullable=False, default=False)

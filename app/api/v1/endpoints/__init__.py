@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.dependencies.permissions import require_module_access
 
 from .agente import router as agente_router
 from .auth import router as auth_router
@@ -59,59 +61,81 @@ from .usuario import router as usuario_router
 
 router = APIRouter()
 
-router.include_router(agente_router)
+# Auth & Usuarios (con reglas de acceso propias en cada endpoint)
 router.include_router(auth_router)
-router.include_router(bodega_router)
-router.include_router(ciudad_router)
-router.include_router(clase_router)
-router.include_router(clausula_venta_router)
-router.include_router(cliente_proveedor_router)
-router.include_router(contacto_router)
-router.include_router(contacto_orden_compra_router)
-router.include_router(contacto_orden_servicio_router)
-router.include_router(contacto_proforma_router)
-router.include_router(contenedor_router)
-router.include_router(detalle_factura_router)
-router.include_router(detalle_gasto_router)
-router.include_router(detalle_ide_router)
-router.include_router(detalle_orden_compra_router)
-router.include_router(detalle_pl_router)
-router.include_router(detalle_proforma_router)
-router.include_router(direccion_router)
-router.include_router(documento_ide_router)
-router.include_router(empresa_router)
-router.include_router(especie_router)
-router.include_router(estado_detalle_ple_router)
-router.include_router(estado_odc_router)
-router.include_router(estado_orden_servicio_router)
-router.include_router(estado_oe_router)
-router.include_router(estado_pl_router)
-router.include_router(estado_proforma_router)
-router.include_router(factura_router)
-router.include_router(forma_pago_router)
-router.include_router(gasto_router)
-router.include_router(guia_costo_servicio_router, prefix="/guia-costo-servicio", tags=["Guía Costo Servicio"])
-router.include_router(ide_router)
-router.include_router(inventario_transitorio_router)
-router.include_router(inventario_puerto_router)
-router.include_router(inventario_segunda_router)
-router.include_router(inventario_dashboard_router)
-router.include_router(moneda_router)
-router.include_router(naviera_router)
-router.include_router(operacion_exportacion_router)
-router.include_router(orden_compra_router)
-router.include_router(orden_servicio_router)
-router.include_router(packinglist_router)
-router.include_router(pais_router)
-router.include_router(parametro_router)
-router.include_router(plc_router)
-router.include_router(ple_router)
-router.include_router(producto_router)
-router.include_router(proforma_router)
-router.include_router(puerto_router)
-router.include_router(seguridad_router)
-router.include_router(tipo_comision_router)
-router.include_router(tipo_envase_router)
-router.include_router(unidad_medida_router)
-router.include_router(unidad_venta_router)
 router.include_router(usuario_router)
+router.include_router(seguridad_router)
+
+# Comercial y Exportación
+router.include_router(proforma_router, dependencies=[Depends(require_module_access("PROFORMA"))])
+router.include_router(detalle_proforma_router, dependencies=[Depends(require_module_access("PROFORMA"))])
+router.include_router(contacto_proforma_router, dependencies=[Depends(require_module_access("PROFORMA"))])
+router.include_router(estado_proforma_router, dependencies=[Depends(require_module_access("PROFORMA"))])
+
+router.include_router(operacion_exportacion_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(estado_oe_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(ide_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(detalle_ide_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(documento_ide_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(factura_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(detalle_factura_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(packinglist_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(detalle_pl_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(estado_pl_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(plc_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(ple_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+router.include_router(estado_detalle_ple_router, dependencies=[Depends(require_module_access("EXPORTACION"))])
+
+# Compras y Abastecimiento
+router.include_router(orden_compra_router, dependencies=[Depends(require_module_access("ORDEN_COMPRA"))])
+router.include_router(detalle_orden_compra_router, dependencies=[Depends(require_module_access("ORDEN_COMPRA"))])
+router.include_router(contacto_orden_compra_router, dependencies=[Depends(require_module_access("ORDEN_COMPRA"))])
+router.include_router(estado_odc_router, dependencies=[Depends(require_module_access("ORDEN_COMPRA"))])
+
+# Inventarios
+router.include_router(inventario_dashboard_router, dependencies=[Depends(require_module_access("INVENTARIO_DASHBOARD"))])
+router.include_router(inventario_transitorio_router, dependencies=[Depends(require_module_access("INVENTARIO_TRANSITORIO"))])
+router.include_router(inventario_puerto_router, dependencies=[Depends(require_module_access("INVENTARIO_PUERTO"))])
+router.include_router(inventario_segunda_router, dependencies=[Depends(require_module_access("INVENTARIO_SEGUNDA"))])
+
+# Servicios
+router.include_router(orden_servicio_router, dependencies=[Depends(require_module_access("ORDEN_SERVICIO"))])
+router.include_router(contacto_orden_servicio_router, dependencies=[Depends(require_module_access("ORDEN_SERVICIO"))])
+router.include_router(estado_orden_servicio_router, dependencies=[Depends(require_module_access("ORDEN_SERVICIO"))])
+router.include_router(
+    guia_costo_servicio_router,
+    prefix="/guia-costo-servicio",
+    tags=["Guía Costo Servicio"],
+    dependencies=[Depends(require_module_access("GUIA_COSTO_SERVICIO"))],
+)
+
+# Mantenedores
+router.include_router(empresa_router, dependencies=[Depends(require_module_access("EMPRESA"))])
+router.include_router(cliente_proveedor_router, dependencies=[Depends(require_module_access("CLIENTE_PROVEEDOR"))])
+router.include_router(contacto_router, dependencies=[Depends(require_module_access("CLIENTE_PROVEEDOR"))])
+router.include_router(direccion_router, dependencies=[Depends(require_module_access("CLIENTE_PROVEEDOR"))])
+
+router.include_router(producto_router, dependencies=[Depends(require_module_access("PRODUCTO"))])
+router.include_router(especie_router, dependencies=[Depends(require_module_access("PRODUCTO"))])
+router.include_router(clase_router, dependencies=[Depends(require_module_access("PRODUCTO"))])
+
+router.include_router(unidad_venta_router, dependencies=[Depends(require_module_access("UNIDAD_VENTA"))])
+router.include_router(unidad_medida_router, dependencies=[Depends(require_module_access("UNIDAD_MEDIDA"))])
+router.include_router(tipo_comision_router, dependencies=[Depends(require_module_access("TIPO_COMISION"))])
+router.include_router(agente_router, dependencies=[Depends(require_module_access("AGENTE"))])
+router.include_router(bodega_router, dependencies=[Depends(require_module_access("BODEGA"))])
+
+router.include_router(pais_router, dependencies=[Depends(require_module_access("UBICACION"))])
+router.include_router(ciudad_router, dependencies=[Depends(require_module_access("UBICACION"))])
+router.include_router(puerto_router, dependencies=[Depends(require_module_access("UBICACION"))])
+router.include_router(naviera_router, dependencies=[Depends(require_module_access("UBICACION"))])
+
+router.include_router(moneda_router, dependencies=[Depends(require_module_access("FINANCIERO"))])
+router.include_router(forma_pago_router, dependencies=[Depends(require_module_access("FINANCIERO"))])
+router.include_router(clausula_venta_router, dependencies=[Depends(require_module_access("FINANCIERO"))])
+router.include_router(gasto_router, dependencies=[Depends(require_module_access("FINANCIERO"))])
+router.include_router(detalle_gasto_router, dependencies=[Depends(require_module_access("FINANCIERO"))])
+router.include_router(parametro_router, dependencies=[Depends(require_module_access("FINANCIERO"))])
+
+router.include_router(contenedor_router, dependencies=[Depends(require_module_access("CONTENEDOR"))])
+router.include_router(tipo_envase_router, dependencies=[Depends(require_module_access("CONTENEDOR"))])

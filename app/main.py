@@ -83,8 +83,16 @@ def log_database_target() -> None:
             "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS largo_real VARCHAR(20)",
             "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS piezas_real NUMERIC(12, 3)",
             "ALTER TABLE inventario_puerto ADD COLUMN IF NOT EXISTS volumen_real NUMERIC(12, 3)",
+            "ALTER TABLE usuario ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'PERSONALIZADO'",
+            "ALTER TABLE seguridad ALTER COLUMN modulo TYPE VARCHAR(60)",
+            "UPDATE usuario SET rol = 'ADMINISTRADOR' WHERE (rol IS NULL OR rol = 'PERSONALIZADO') AND (LOWER(login) IN ('admin', 'administrador', 'lrodriguez') OR id_usuario IN (SELECT id_usuario FROM seguridad WHERE UPPER(modulo) IN ('SEGURIDAD', 'USUARIO') AND crear = TRUE))",
         ]:
-            db.execute(text(col_sql))
+            try:
+                db.execute(text(col_sql))
+                db.commit()
+            except Exception as sql_err:
+                db.rollback()
+                print(f"[DB] Aviso en sentencia startup ({col_sql[:50]}...): {sql_err}")
         estados_default = [(1, "PENDIENTE"), (2, "EN PROCESO"), (3, "CUMPLIDA"), (4, "ANULADA")]
         for eid, nombre in estados_default:
             existing = db.query(EstadoOrdenServicio).filter_by(id_estado_orden_servicio=eid).first()

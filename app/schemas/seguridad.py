@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class SeguridadBase(BaseModel):
     id_usuario: int = Field(..., description="ID del usuario")
-    modulo: str = Field(..., max_length=15, description="Nombre del módulo, por ejemplo: usuario, proforma, orden_compra")
+    modulo: str = Field(..., max_length=60, description="Nombre del módulo, por ejemplo: USUARIO, PROFORMA, ORDEN_COMPRA")
     crear: bool = Field(default=False, description="Permiso para crear")
     ver: bool = Field(default=False, description="Permiso para ver")
     editar: bool = Field(default=False, description="Permiso para editar")
@@ -17,7 +17,7 @@ class SeguridadCreate(SeguridadBase):
             "examples": [
                 {
                     "id_usuario": 1,
-                    "modulo": "usuario",
+                    "modulo": "USUARIO",
                     "crear": True,
                     "ver": True,
                     "editar": True,
@@ -30,7 +30,7 @@ class SeguridadCreate(SeguridadBase):
 
 class SeguridadUpdate(BaseModel):
     id_usuario: Optional[int] = None
-    modulo: Optional[str] = Field(None, max_length=15, description="Nombre del módulo")
+    modulo: Optional[str] = Field(None, max_length=60, description="Nombre del módulo")
     crear: Optional[bool] = None
     ver: Optional[bool] = None
     editar: Optional[bool] = None

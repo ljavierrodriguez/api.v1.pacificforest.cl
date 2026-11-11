@@ -4,17 +4,23 @@ from sqlalchemy.orm import Session
 from app.schemas.seguridad import SeguridadCreate, SeguridadRead, SeguridadUpdate
 from app.schemas.pagination import create_paginated_response, create_paginated_response_model
 from app.models.seguridad import Seguridad
-from app.models.usuario import User
+from app.models.usuario import User, normalize_module_code
+from app.dependencies.permissions import require_module_access
 from app.db.session import get_db
 
 # Crear el modelo de respuesta paginada para Seguridad
 PaginatedSeguridadResponse = create_paginated_response_model(SeguridadRead)
 
-router = APIRouter(prefix="/seguridad", tags=["seguridad"])
+router = APIRouter(
+    prefix="/seguridad",
+    tags=["seguridad"],
+    dependencies=[Depends(require_module_access("USUARIO"))],
+)
 
 
 @router.post("/", response_model=SeguridadRead, status_code=201, summary='Crear seguridad', description='Crea un nuevo registro de seguridad para un usuario y módulo.')
 def create_seguridad(payload: SeguridadCreate, db: Session = Depends(get_db)):
+    modulo_norm = normalize_module_code(payload.modulo)
     # Verificar que el usuario existe
     usuario = db.query(User).filter(User.id_usuario == payload.id_usuario).first()
     if not usuario:
@@ -23,20 +29,20 @@ def create_seguridad(payload: SeguridadCreate, db: Session = Depends(get_db)):
     # Verificar que no existe ya un registro para este usuario y módulo
     existe = db.query(Seguridad).filter(
         Seguridad.id_usuario == payload.id_usuario,
-        Seguridad.modulo == payload.modulo
+        Seguridad.modulo == modulo_norm
     ).first()
     
     if existe:
         raise HTTPException(
             status_code=400,
-            detail=f"Ya existe un registro de seguridad para el usuario {payload.id_usuario} y el módulo '{payload.modulo}'"
+            detail=f"Ya existe un registro de seguridad para el usuario {payload.id_usuario} y el módulo '{modulo_norm}'"
         )
     
     seguridad = Seguridad(
         id_usuario=payload.id_usuario,
-        modulo=payload.modulo,
+        modulo=modulo_norm,
         crear=payload.crear,
-        ver=payload.ver,
+        ver=payload.ver or payload.crear or payload.editar or payload.eliminar,
         editar=payload.editar,
         eliminar=payload.eliminar
     )
